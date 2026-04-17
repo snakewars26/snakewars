@@ -2862,31 +2862,17 @@ function showBossAnnounce(bt) {
   if(existing) existing.remove();
   const banner = document.createElement('div');
   banner.id = 'bossAnnounceBanner';
-  banner.style.cssText = `
-    position:fixed;top:54px;left:50%;transform:translateX(-50%) translateY(-80px);
-    z-index:8887;pointer-events:none;
-    background:linear-gradient(135deg,rgba(180,0,0,0.92),rgba(80,0,0,0.92));
-    border:1.5px solid #ff3300;border-radius:12px;
-    padding:0.5rem 1.2rem;text-align:center;
-    box-shadow:0 0 24px #ff330088;
-    transition:transform 0.35s cubic-bezier(.2,1.4,.4,1);
-    font-family:'Orbitron',monospace;
-  `;
+  banner.style.cssText = 'position:fixed;top:160px;left:50%;transform:translateX(-50%);z-index:99990;pointer-events:none;background:linear-gradient(135deg,rgba(180,0,0,0.95),rgba(60,0,0,0.95));border:2px solid #ff4400;border-radius:14px;padding:0.7rem 1.4rem;text-align:center;box-shadow:0 0 30px #ff330099,0 0 60px #ff330044;font-family:Orbitron,monospace;opacity:0;transition:opacity 0.3s ease;';
   banner.innerHTML = `
-    <div style="font-size:clamp(0.9rem,4vw,1.3rem);font-weight:900;color:#fff;letter-spacing:0.08em;text-shadow:0 0 12px #ff3300;">
-      ${bt.crownEmoji} BOSS APPARU — ${bt.name}
+    <div style="font-size:clamp(1rem,5vw,1.5rem);font-weight:900;color:#fff;letter-spacing:0.08em;text-shadow:0 0 16px #ff3300;">
+      ${bt.crownEmoji} BOSS — ${bt.name}
     </div>
-    <div style="font-size:clamp(0.55rem,2.5vw,0.75rem);color:rgba(255,200,0,0.9);margin-top:0.2rem;letter-spacing:0.12em;">
-      ${bt.msg.split('!')[1] ? bt.msg.split('!')[1].trim() : '⚠️ Danger — voir minimap'}
+    <div style="font-size:clamp(0.6rem,3vw,0.85rem);color:#ffcc00;margin-top:0.25rem;letter-spacing:0.1em;">
+      ⚠️ Repérez-le sur la minimap !
     </div>`;
   document.body.appendChild(banner);
-  requestAnimationFrame(() => {
-    banner.style.transform = 'translateX(-50%) translateY(0)';
-  });
-  setTimeout(() => {
-    banner.style.transform = 'translateX(-50%) translateY(-80px)';
-    setTimeout(() => banner.remove(), 400);
-  }, 3500);
+  setTimeout(() => { banner.style.opacity = '1'; }, 30);
+  setTimeout(() => { banner.style.opacity = '0'; setTimeout(() => banner.remove(), 350); }, 4000);
 }
 
 function brRandomCenter(radius) {
@@ -4845,8 +4831,8 @@ function startGame(mode='battleroyale', realPlayerCount=0) {
   const powerups = [];
   for(let i=0; i<POWERUP_COUNT; i++) powerups.push(new PowerUp());
 
-  // Boss plus rapide en BR (5s) car les parties se terminent vite — 30s sinon
-  const _initBossTimer = (mode === 'battleroyale') ? 300 : 1800;
+  // Boss spawn rapide en BR (1s) pour test visibilité
+  const _initBossTimer = (mode === 'battleroyale') ? 60 : 1800;
   gameState = { player, snakes, foods, powerups, coins:0, frozen:false, freezeTimer:0, frame:0, activePowerups:[], bossSpawnTimer:_initBossTimer, kills:0, gameOverTriggered:false, gameMode:mode };
   if(_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
   bossAlive = false;

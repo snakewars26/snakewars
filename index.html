@@ -2866,20 +2866,20 @@ function showBossAnnounce(bt) {
   const banner = document.createElement('div');
   banner.id = 'bossAnnounceBanner';
   banner.style.cssText = `
-    position:fixed;top:54px;left:50%;transform:translateX(-50%) translateY(-80px);
+    position:fixed;top:54px;left:50%;transform:translateX(-50%) translateY(-70px);
     z-index:8887;pointer-events:none;
-    background:linear-gradient(135deg,rgba(180,0,0,0.92),rgba(80,0,0,0.92));
-    border:1.5px solid #ff3300;border-radius:12px;
-    padding:0.5rem 1.2rem;text-align:center;
-    box-shadow:0 0 24px #ff330088;
+    background:linear-gradient(135deg,rgba(160,0,0,0.88),rgba(70,0,0,0.88));
+    border:1px solid #ff3300;border-radius:9px;
+    padding:0.3rem 0.85rem;text-align:center;
+    box-shadow:0 0 14px #ff330066;
     transition:transform 0.35s cubic-bezier(.2,1.4,.4,1);
     font-family:'Orbitron',monospace;
   `;
   banner.innerHTML = `
-    <div style="font-size:clamp(0.9rem,4vw,1.3rem);font-weight:900;color:#fff;letter-spacing:0.08em;text-shadow:0 0 12px #ff3300;">
-      ${bt.crownEmoji} BOSS APPARU — ${bt.name}
+    <div style="font-size:clamp(0.65rem,2.8vw,0.9rem);font-weight:900;color:#fff;letter-spacing:0.06em;text-shadow:0 0 8px #ff3300;">
+      ${bt.crownEmoji} BOSS — ${bt.name}
     </div>
-    <div style="font-size:clamp(0.55rem,2.5vw,0.75rem);color:rgba(255,200,0,0.9);margin-top:0.2rem;letter-spacing:0.12em;">
+    <div style="font-size:clamp(0.44rem,1.8vw,0.58rem);color:rgba(255,200,0,0.85);margin-top:0.1rem;letter-spacing:0.1em;">
       ${bt.msg.split('!')[1] ? bt.msg.split('!')[1].trim() : '⚠️ Danger — voir minimap'}
     </div>`;
   document.body.appendChild(banner);
@@ -5243,20 +5243,20 @@ function gameLoop(timestamp = 0) {
     }
     // Choisir un type de boss aléatoirement
     const bossTypes = [
-      { name: '👹 TITAN',    skin: 3,  length: 400, speed: 0.75, behavior: 'aggressive', msg: '👹 TITAN apparu ! Énorme et impitoyable !',
-        color1:'#cc0000', color2:'#ff4400', aura:'255,0,0',     glowColor:'#ff0000', crownEmoji:'👹', size: 3.0 },
-      { name: '🐉 DRAGON',   skin: 7,  length: 320, speed: 1.1,  behavior: 'ambusher',   msg: '🐉 DRAGON ! Rapide et traître !',
-        color1:'#ff4400', color2:'#ff8800', aura:'255,100,0',   glowColor:'#ff6600', crownEmoji:'🐉', size: 2.5 },
-      { name: '💀 REAPER',   skin: 5,  length: 360, speed: 0.9,  behavior: 'hunter',     msg: '💀 REAPER ! Il chasse le #1 !',
-        color1:'#220033', color2:'#bf00ff', aura:'191,0,255',   glowColor:'#bf00ff', crownEmoji:'💀', size: 2.7 },
-      { name: '🌑 SHADOW',   skin: 9,  length: 300, speed: 1.2,  behavior: 'ambusher',   msg: '🌑 SHADOW ! Impossible à esquiver !',
-        color1:'#050510', color2:'#333399', aura:'50,50,200',   glowColor:'#4444ff', crownEmoji:'🌑', size: 2.4 },
-      { name: '⚡ THUNDER',  skin: 17, length: 380, speed: 1.0,  behavior: 'aggressive', msg: '⚡ THUNDER ! La foudre s\'abat sur l\'arène !',
-        color1:'#aaaa00', color2:'#ffff00', aura:'255,255,0',   glowColor:'#ffff00', crownEmoji:'⚡', size: 2.8 },
-      { name: '🧊 BLIZZARD', skin: 8,  length: 340, speed: 0.85, behavior: 'hunter',     msg: '🧊 BLIZZARD ! Tout gèle sur son passage !',
-        color1:'#aaddff', color2:'#ffffff', aura:'150,220,255', glowColor:'#88ffff', crownEmoji:'🧊', size: 2.6 },
-      { name: '☢️ TOXIC',    skin: 9,  length: 310, speed: 1.15, behavior: 'ambusher',   msg: '☢️ TOXIC ! Venimeux et imprévisible !',
-        color1:'#336600', color2:'#aaff00', aura:'100,255,0',   glowColor:'#39ff14', crownEmoji:'☢️', size: 2.5 },
+      { name: '👹 TITAN',    skin: 3,  length: 300, speed: 0.75, behavior: 'aggressive', msg: '👹 TITAN apparu ! Énorme et impitoyable !',
+        color1:'#cc0000', color2:'#ff4400', aura:'255,0,0',     glowColor:'#ff0000', crownEmoji:'👹', size: 2.0 },
+      { name: '🐉 DRAGON',   skin: 7,  length: 240, speed: 1.1,  behavior: 'ambusher',   msg: '🐉 DRAGON ! Rapide et traître !',
+        color1:'#ff4400', color2:'#ff8800', aura:'255,100,0',   glowColor:'#ff6600', crownEmoji:'🐉', size: 1.7 },
+      { name: '💀 REAPER',   skin: 5,  length: 270, speed: 0.9,  behavior: 'hunter',     msg: '💀 REAPER ! Il chasse le #1 !',
+        color1:'#220033', color2:'#bf00ff', aura:'191,0,255',   glowColor:'#bf00ff', crownEmoji:'💀', size: 1.8 },
+      { name: '🌑 SHADOW',   skin: 9,  length: 220, speed: 1.2,  behavior: 'ambusher',   msg: '🌑 SHADOW ! Impossible à esquiver !',
+        color1:'#050510', color2:'#333399', aura:'50,50,200',   glowColor:'#4444ff', crownEmoji:'🌑', size: 1.6 },
+      { name: '⚡ THUNDER',  skin: 17, length: 280, speed: 1.0,  behavior: 'aggressive', msg: '⚡ THUNDER ! La foudre s\'abat sur l\'arène !',
+        color1:'#aaaa00', color2:'#ffff00', aura:'255,255,0',   glowColor:'#ffff00', crownEmoji:'⚡', size: 1.9 },
+      { name: '🧊 BLIZZARD', skin: 8,  length: 250, speed: 0.85, behavior: 'hunter',     msg: '🧊 BLIZZARD ! Tout gèle sur son passage !',
+        color1:'#aaddff', color2:'#ffffff', aura:'150,220,255', glowColor:'#88ffff', crownEmoji:'🧊', size: 1.75 },
+      { name: '☢️ TOXIC',    skin: 9,  length: 230, speed: 1.15, behavior: 'ambusher',   msg: '☢️ TOXIC ! Venimeux et imprévisible !',
+        color1:'#336600', color2:'#aaff00', aura:'100,255,0',   glowColor:'#39ff14', crownEmoji:'☢️', size: 1.7 },
     ];
     const bt = bossTypes[Math.floor(Math.random() * bossTypes.length)];
     const boss = new Snake(bx, by, bt.skin, bt.name, false);

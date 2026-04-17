@@ -995,7 +995,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
   </div>
 </div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 'use strict';
 
 // ── Échappement HTML — protège tous les innerHTML avec données réseau
@@ -2145,7 +2145,8 @@ function _showGameOverSW(gs) {
   if(!p) return;
   if(p.kills > (sd.kills || 0)) sd.kills = p.kills;
   if(Math.floor(p.length) > (sd.bestLen || 0)) sd.bestLen = Math.floor(p.length);
-  if(p.score > (sd.bestScore || 0)) sd.bestScore = p.score;
+  const _prevBestScore = sd.bestScore || 0; // snapshot AVANT mise à jour
+  if(p.score > _prevBestScore) sd.bestScore = p.score;
   sd.totalKills = (sd.totalKills || 0) + p.kills;
   saveSD();
   refreshMenu();
@@ -2171,7 +2172,7 @@ function _showGameOverSW(gs) {
   // Record personnel
   const dRecord = document.getElementById('dRecord');
   if(dRecord) {
-    const isNewRecord = p.score > 0 && p.score >= (sd.bestScore || 0);
+    const isNewRecord = p.score > 0 && p.score > _prevBestScore;
     dRecord.textContent = isNewRecord ? '🏆 NOUVEAU RECORD !' : `Record : ${(sd.bestScore||0).toLocaleString()}`;
     dRecord.style.color = isNewRecord ? '#ffd700' : 'rgba(255,255,255,0.3)';
   }
@@ -2270,6 +2271,8 @@ let brZoneCX       = 0;       // centre X zone actuel
 let brZoneCY       = 0;       // centre Y zone actuel
 let brNextZoneCX   = 0;       // prochain centre X (zone se déplace à chaque phase)
 let brNextZoneCY   = 0;       // prochain centre Y
+let brPrevZoneCX   = 0;       // centre de départ de la phase courante (FIX interpolation)
+let brPrevZoneCY   = 0;
 let brShrinkTimer  = 0;       // frames avant prochain rétrécissement
 let brPhase        = 0;       // phase 0-5 (zone de plus en plus petite)
 let brAlive        = 0;       // serpents encore vivants
@@ -2862,17 +2865,31 @@ function showBossAnnounce(bt) {
   if(existing) existing.remove();
   const banner = document.createElement('div');
   banner.id = 'bossAnnounceBanner';
-  banner.style.cssText = 'position:fixed;top:160px;left:50%;transform:translateX(-50%);z-index:99990;pointer-events:none;background:linear-gradient(135deg,rgba(180,0,0,0.95),rgba(60,0,0,0.95));border:2px solid #ff4400;border-radius:14px;padding:0.7rem 1.4rem;text-align:center;box-shadow:0 0 30px #ff330099,0 0 60px #ff330044;font-family:Orbitron,monospace;opacity:0;transition:opacity 0.3s ease;';
+  banner.style.cssText = `
+    position:fixed;top:54px;left:50%;transform:translateX(-50%) translateY(-80px);
+    z-index:8887;pointer-events:none;
+    background:linear-gradient(135deg,rgba(180,0,0,0.92),rgba(80,0,0,0.92));
+    border:1.5px solid #ff3300;border-radius:12px;
+    padding:0.5rem 1.2rem;text-align:center;
+    box-shadow:0 0 24px #ff330088;
+    transition:transform 0.35s cubic-bezier(.2,1.4,.4,1);
+    font-family:'Orbitron',monospace;
+  `;
   banner.innerHTML = `
-    <div style="font-size:clamp(1rem,5vw,1.5rem);font-weight:900;color:#fff;letter-spacing:0.08em;text-shadow:0 0 16px #ff3300;">
-      ${bt.crownEmoji} BOSS — ${bt.name}
+    <div style="font-size:clamp(0.9rem,4vw,1.3rem);font-weight:900;color:#fff;letter-spacing:0.08em;text-shadow:0 0 12px #ff3300;">
+      ${bt.crownEmoji} BOSS APPARU — ${bt.name}
     </div>
-    <div style="font-size:clamp(0.6rem,3vw,0.85rem);color:#ffcc00;margin-top:0.25rem;letter-spacing:0.1em;">
-      ⚠️ Repérez-le sur la minimap !
+    <div style="font-size:clamp(0.55rem,2.5vw,0.75rem);color:rgba(255,200,0,0.9);margin-top:0.2rem;letter-spacing:0.12em;">
+      ${bt.msg.split('!')[1] ? bt.msg.split('!')[1].trim() : '⚠️ Danger — voir minimap'}
     </div>`;
   document.body.appendChild(banner);
-  setTimeout(() => { banner.style.opacity = '1'; }, 30);
-  setTimeout(() => { banner.style.opacity = '0'; setTimeout(() => banner.remove(), 350); }, 4000);
+  requestAnimationFrame(() => {
+    banner.style.transform = 'translateX(-50%) translateY(0)';
+  });
+  setTimeout(() => {
+    banner.style.transform = 'translateX(-50%) translateY(-80px)';
+    setTimeout(() => banner.remove(), 400);
+  }, 3500);
 }
 
 function brRandomCenter(radius) {
@@ -2887,6 +2904,8 @@ function initBattleRoyale(gs) {
   brActive      = true;
   brZoneCX      = WORLD / 2;
   brZoneCY      = WORLD / 2;
+  brPrevZoneCX  = WORLD / 2; // FIX: snapshot du centre de départ pour interpolation linéaire
+  brPrevZoneCY  = WORLD / 2;
   // Prochain centre légèrement décalé dès le début
   const next0 = brRandomCenter(WORLD * 0.5);
   brNextZoneCX  = next0.cx;
@@ -2926,11 +2945,9 @@ function updateBattleRoyale(gs) {
       const startR  = brPhase === 0 ? WORLD*0.72 : WORLD * BR_PHASES[brPhase-1].targetRatio;
       brZoneRadius  = startR + (targetR - startR) * shrinkProgress;
 
-      // ── Déplacement progressif du centre vers le prochain ──
-      const prevCX = brPhase === 0 ? WORLD/2 : (brZoneCX);
-      const prevCY = brPhase === 0 ? WORLD/2 : (brZoneCY);
-      brZoneCX = prevCX + (brNextZoneCX - prevCX) * shrinkProgress;
-      brZoneCY = prevCY + (brNextZoneCY - prevCY) * shrinkProgress;
+      // ── Déplacement progressif du centre — FIX: utilise brPrevZone (snapshot stable) ──
+      brZoneCX = brPrevZoneCX + (brNextZoneCX - brPrevZoneCX) * shrinkProgress;
+      brZoneCY = brPrevZoneCY + (brNextZoneCY - brPrevZoneCY) * shrinkProgress;
 
       if(shrinkProgress >= 1) {
         brZoneCX = brNextZoneCX;
@@ -2938,6 +2955,9 @@ function updateBattleRoyale(gs) {
         brPhase++;
         if(brPhase < BR_PHASES.length) {
           brShrinkTimer = BR_PHASES[brPhase].delay;
+          // Snapshot du centre actuel pour la prochaine phase
+          brPrevZoneCX = brZoneCX;
+          brPrevZoneCY = brZoneCY;
           // Générer le prochain centre pour la phase suivante
           const nxt = brRandomCenter(WORLD * BR_PHASES[brPhase].targetRatio);
           brNextZoneCX = nxt.cx;
@@ -3400,7 +3420,11 @@ class Snake {
   get head() { return this.path[0]; }
   // segments = alias vers path pour compatibilité collision
   get segments() { return this.path; }
-  get size() { return Math.min(5 + Math.sqrt(this.score + (this._giantScoreBonus||0)) * 0.18, 18); }
+  get size() {
+    if (this._sizeOverride) return this._sizeOverride;
+    return Math.min(5 + Math.sqrt(this.score + (this._giantScoreBonus||0)) * 0.18, 18);
+  }
+  set size(v) { this._sizeOverride = v; }
   // Nombre de points à dessiner
   get drawCount() {
     return Math.min(Math.floor(this.length * DRAW_SPACING), this.path.length);
@@ -3900,7 +3924,7 @@ class Snake {
       this.skillCDs.magnet = 20;
       addBonus('🧲 AIMANT', '5s', 'var(--neon-gold)');
     }
-    if(name === 'bomb' && hasStat('hasBomb') && this.skillCDs.bomb <= 0) {
+    if(name === 'bomb' && this.skillCDs.bomb <= 0) {
       // Explode nearby snakes
       gameState.snakes.forEach(s => {
         if(s === gameState.player || !s.alive) return;
@@ -4582,8 +4606,10 @@ function killSnake(snake, gs, playerKill = false) {
     if(inGold) { gs.player.score += Math.floor(snake.length); }
   }
 
-  // Boss respawn faster
-  const respawnDelay = snake.isBoss ? 20000 : 4000 + Math.random()*3000;
+  // Boss respawn: 20-30s (cohérent avec bossSpawnTimer)
+  const respawnDelay = snake.isBoss
+    ? (20000 + Math.random() * 10000)  // 20-30s
+    : 4000 + Math.random() * 3000;
 
   // Bug fix : boss mort → reset bossAlive + prochain boss dans 20s (BR inclus)
   if(snake.isBoss) {
@@ -4706,6 +4732,8 @@ function resetAllGameState() {
   brZoneRadius    = 0;
   brZoneCX        = WORLD / 2;
   brZoneCY        = WORLD / 2;
+  brPrevZoneCX    = WORLD / 2;
+  brPrevZoneCY    = WORLD / 2;
 
   // Réseau
   stopPositionSync();
@@ -4831,8 +4859,8 @@ function startGame(mode='battleroyale', realPlayerCount=0) {
   const powerups = [];
   for(let i=0; i<POWERUP_COUNT; i++) powerups.push(new PowerUp());
 
-  // Boss spawn rapide en BR (1s) pour test visibilité
-  const _initBossTimer = (mode === 'battleroyale') ? 60 : 1800;
+  // Boss: 20s en BR, 30s sinon — respawn fréquent
+  const _initBossTimer = (mode === 'battleroyale') ? 1200 : 1800;
   gameState = { player, snakes, foods, powerups, coins:0, frozen:false, freezeTimer:0, frame:0, activePowerups:[], bossSpawnTimer:_initBossTimer, kills:0, gameOverTriggered:false, gameMode:mode };
   if(_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
   bossAlive = false;
@@ -4841,7 +4869,6 @@ function startGame(mode='battleroyale', realPlayerCount=0) {
   shakeIntensity = 0;
 
   setupControls();
-  setupJoystick();
   updateLeaderboard(gameState);
 
   // Afficher les contrôles selon la plateforme
@@ -5152,7 +5179,7 @@ function gameLoop(timestamp = 0) {
         });
       }
       if(z.effect==='xp' && gs.frame % 60 === 0) {
-        p.score += p.isPlayer ? 5 : 3;
+        p.score += 5; // +5 XP/s pour le joueur
       }
       if(z.effect==='coins' && gs.frame % 60 === 0) {
         gs.coins += 1;
@@ -5199,10 +5226,8 @@ function gameLoop(timestamp = 0) {
   // ── BOSS SPAWN : apparition aléatoire n'importe où sur la map ──
   gs.bossSpawnTimer--;
   if(gs.bossSpawnTimer <= 0 && !bossAlive) {
-    // Délai avant la prochaine apparition : court en BR (10-20s), long sinon (45-120s)
-    gs.bossSpawnTimer = (gs.gameMode === 'battleroyale')
-      ? ((600 + Math.random() * 600) | 0)
-      : ((2700 + Math.random() * 4500) | 0);
+    // Respawn 20-30s après mort quelle que soit le mode
+    gs.bossSpawnTimer = (1200 + Math.random() * 600) | 0; // 20-30s à 60fps
     // En BR : spawn dans la zone sécurisée courante (sinon le boss reste hors zone à jamais)
     // En solo : spawn aléatoire sur toute la map
     let bx, by;
@@ -5421,10 +5446,13 @@ function gameLoop(timestamp = 0) {
             // Un serpent avec shield ne peut pas mourir ET ne peut pas tuer
             if(attacker.shieldActive) continue;
             if(victim.shieldActive) continue;
-            // Fantôme : le joueur traverse tout — ni tuer ni être tué
-            const playerIsGhost = (attacker.isPlayer || victim.isPlayer) &&
-              (gs.player.wallGhostTimer > 0 || hasStat('wallGhost'));
-            if(playerIsGhost) continue;
+            // Fantôme : immunité traversal — joueur ET bots dans la zone ghost
+            const playerIsGhost = (attacker.isPlayer || victim.isPlayer)
+              ? (gs.player.wallGhostTimer > 0 || hasStat('wallGhost'))
+              : false;
+            const attackerIsGhost = attacker.wallGhostTimer > 0;
+            const victimIsGhost   = victim.wallGhostTimer   > 0;
+            if(playerIsGhost || attackerIsGhost || victimIsGhost) continue;
             if(attacker.isPlayer) {
               killSnake(attacker, gs);
             } else if(attacker.isBoss) {

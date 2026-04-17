@@ -2857,6 +2857,38 @@ function showBRCountdown(callback) {
   tick();
 }
 
+function showBossAnnounce(bt) {
+  const existing = document.getElementById('bossAnnounceBanner');
+  if(existing) existing.remove();
+  const banner = document.createElement('div');
+  banner.id = 'bossAnnounceBanner';
+  banner.style.cssText = `
+    position:fixed;top:54px;left:50%;transform:translateX(-50%) translateY(-80px);
+    z-index:8887;pointer-events:none;
+    background:linear-gradient(135deg,rgba(180,0,0,0.92),rgba(80,0,0,0.92));
+    border:1.5px solid #ff3300;border-radius:12px;
+    padding:0.5rem 1.2rem;text-align:center;
+    box-shadow:0 0 24px #ff330088;
+    transition:transform 0.35s cubic-bezier(.2,1.4,.4,1);
+    font-family:'Orbitron',monospace;
+  `;
+  banner.innerHTML = `
+    <div style="font-size:clamp(0.9rem,4vw,1.3rem);font-weight:900;color:#fff;letter-spacing:0.08em;text-shadow:0 0 12px #ff3300;">
+      ${bt.crownEmoji} BOSS APPARU — ${bt.name}
+    </div>
+    <div style="font-size:clamp(0.55rem,2.5vw,0.75rem);color:rgba(255,200,0,0.9);margin-top:0.2rem;letter-spacing:0.12em;">
+      ${bt.msg.split('!')[1] ? bt.msg.split('!')[1].trim() : '⚠️ Danger — voir minimap'}
+    </div>`;
+  document.body.appendChild(banner);
+  requestAnimationFrame(() => {
+    banner.style.transform = 'translateX(-50%) translateY(0)';
+  });
+  setTimeout(() => {
+    banner.style.transform = 'translateX(-50%) translateY(-80px)';
+    setTimeout(() => banner.remove(), 400);
+  }, 3500);
+}
+
 function brRandomCenter(radius) {
   // Nouveau centre aléatoire mais toujours dans la map avec une marge
   const margin = radius * 0.3 + 200;
@@ -5231,7 +5263,7 @@ function gameLoop(timestamp = 0) {
     boss.size = 18 * (bt.size || 1.3);
     gs.snakes.push(boss);
     bossAlive = true;
-    showNotif(bt.msg);
+    showBossAnnounce(bt);
     sfxBoss();
     screenShake(15);
   }
@@ -5409,6 +5441,14 @@ function gameLoop(timestamp = 0) {
             if(playerIsGhost) continue;
             if(attacker.isPlayer) {
               killSnake(attacker, gs);
+            } else if(attacker.isBoss) {
+              // ── BOSS IMMUNITÉ CORPS : le boss tue le bot au lieu de mourir ──
+              if(!victim.isBoss && !victim.isPlayer && !victim.isRemotePlayer) {
+                killSnake(victim, gs, false);
+              } else if(victim.isPlayer || victim.isRemotePlayer) {
+                // Boss tue le joueur qui fonce dans son corps
+                killSnake(victim, gs, false);
+              }
             } else {
               if(victim.isPlayer) {
                 gs.player.kills++;
@@ -5851,11 +5891,12 @@ function drawMinimap(ctx, gs) {
     const my = s.head.y * scale;
     ctx.beginPath();
     if(s.isBoss) {
-      ctx.arc(mx, my, 5, 0, Math.PI*2);
-      ctx.fillStyle = '#ff3300';
-      // Halo rouge pour le boss
+      const blink = Math.floor(Date.now() / 300) % 2 === 0;
+      ctx.beginPath();
+      ctx.arc(mx, my, blink ? 6 : 4, 0, Math.PI*2);
+      ctx.fillStyle = blink ? '#ff6600' : '#ff3300';
       ctx.shadowColor = '#ff3300';
-      ctx.shadowBlur = 6;
+      ctx.shadowBlur = blink ? 10 : 5;
       ctx.fill();
       ctx.shadowBlur = 0;
     } else {

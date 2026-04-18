@@ -2892,6 +2892,31 @@ function showBRResultPopup(gs, rank) {
   if(gs) gs.gameOverTriggered = true;
   saveNow(false);
 
+  // ── Sauvegarder stats + reset consommables ──
+  // (showGameOver n'est jamais appelé via cette branche BR)
+  const _brP = gs && gs.player;
+  if (_brP) {
+    if (_brP.kills > (sd.kills || 0)) sd.kills = _brP.kills;
+    if (Math.floor(_brP.length) > (sd.bestLen || 0)) sd.bestLen = Math.floor(_brP.length);
+    if (_brP.score > (sd.bestScore || 0)) sd.bestScore = _brP.score;
+    sd.totalKills = (sd.totalKills || 0) + _brP.kills;
+    if (gs.coins > 0) sd.coins = (sd.coins || 0) + gs.coins;
+  }
+  // Reset consommables : skin, acc, skills (modèle 1 manche)
+  const _brFreeSkins = SKINS.filter(s => s.free);
+  if (_brFreeSkins.length) sd.equippedSkin = _brFreeSkins[0].id;
+  sd.equippedAcc = [];
+  if (sd.equippedSkills && sd.equippedSkills.length === 3) {
+    sd.equippedSkills = sd.equippedSkills.map(id => {
+      if (!id) return null;
+      const skill = ALL_SKILLS.find(s => s.id === id);
+      return (skill && skill.free) ? id : null;
+    });
+  }
+  currentBuild = sd.equippedSkills ? [...sd.equippedSkills] : [null, null, null];
+  saveSD();
+  refreshMenu();
+
   // Injecter le style d'animation si besoin
   if (!document.getElementById('brResultStyle')) {
     const s = document.createElement('style');

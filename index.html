@@ -41,7 +41,7 @@
 <meta name="twitter:image" content="https://snakewars26.github.io/snakewars/preview.png">
 <!-- Google AdSense -->
 <meta name="google-adsense-account" content="ca-pub-5433648295830648">
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5433648295830648" crossorigin="anonymous"></script>
+<!-- AdSense chargé après consentement RGPD via initAds() uniquement — RGPD/ePrivacy compliant -->
 <!-- Ably Realtime SDK -->
 <script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
 
@@ -535,15 +535,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
       <p style="margin-top:.45rem;">⭐ <strong style="color:#bf00ff;">ZONE XP</strong> — +5 XP par seconde. Zone centrale très convoitée — dangereuse mais rentable.</p>
       <p style="margin-top:.45rem;">💚 <strong style="color:#39ff14;">ZONE SOIN</strong> — Régénère +8 énergie toutes les 3s. Refuge stratégique en fin de partie.</p>
     </div>
-
-    <!-- Pub in-article -->
-    <ins class="adsbygoogle"
-      style="display:block;text-align:center;margin:.5rem 0;"
-      data-ad-layout="in-article"
-      data-ad-format="fluid"
-      data-ad-client="ca-pub-5433648295830648"
-      data-ad-slot="5101438658"></ins>
-    <script>(adsbygoogle=window.adsbygoogle||[]).push({});</script>
 
     <!-- Les 8 skills -->
     <div class="seo-blk" style="background:rgba(0,255,100,.04);border:1px solid rgba(0,255,100,.12);">
@@ -1200,7 +1191,6 @@ function showQueue(playerName, skinId) {
         if(ov) ov.remove();
         // Lancer le jeu
         currentUser = { pseudo: playerName, id: 'local' };
-        sd.selectedSkin = skinId;
         lobbyPendingMode = 'battleroyale';
         buildGameMode = 'battleroyale';
         startGame('battleroyale', 0);
@@ -2656,7 +2646,7 @@ function playGameMusic() {
 
 function toggleMusic() {
   musicEnabled = !musicEnabled;
-  if(musicEnabled) { const _gEl = document.getElementById('game'); startMusic(_gEl && _gEl.classList.contains('active') ? 'game' : 'menu'); }
+  if(musicEnabled) { const _gEl = document.getElementById('gameScreen'); startMusic(_gEl && _gEl.classList.contains('active') ? 'game' : 'menu'); }
   else stopMusic();
   updateAudioBtns();
 }
@@ -2880,7 +2870,7 @@ function showBossAnnounce(bt) {
       ${bt.crownEmoji} BOSS — ${bt.name}
     </div>
     <div style="font-size:clamp(0.44rem,1.8vw,0.58rem);color:rgba(255,200,0,0.85);margin-top:0.1rem;letter-spacing:0.1em;">
-      ${bt.msg.split('!')[1] ? bt.msg.split('!')[1].trim() : '⚠️ Danger — voir minimap'}
+      ${bt.msg.split('!').slice(1).join('!').trim() || '⚠️ Danger — voir minimap'}
     </div>`;
   document.body.appendChild(banner);
   requestAnimationFrame(() => {
@@ -3448,13 +3438,13 @@ class Snake {
     // Timers
     // Timers basés sur dt — corrects à 30fps ET 60fps
     const dtSec = dt / 60; // dt est normalisé à 60fps, donc /60 = secondes réelles
-    if(this.shieldTimer > 0) { this.shieldTimer -= 1/60; if(this.shieldTimer <= 0) { this.shieldActive = false; this.spawnImmune = false; } }
+    if(this.shieldTimer > 0) { this.shieldTimer -= dtSec; if(this.shieldTimer <= 0) { this.shieldActive = false; this.spawnImmune = false; } }
     if(this.magnetTimer > 0) { this.magnetTimer -= dtSec; if(this.magnetTimer <= 0) this.magnetActive = false; }
     if(this.turboTimer    > 0) this.turboTimer    -= dtSec;
     if(this.overloadTimer > 0) this.overloadTimer -= dtSec;
     if(this.virusTimer    > 0) this.virusTimer    -= dtSec;
     if(this.wallGhostTimer> 0) this.wallGhostTimer -= dtSec;
-    Object.keys(this.skillCDs).forEach(k => { if(this.skillCDs[k] > 0) this.skillCDs[k] -= 1/60; });
+    Object.keys(this.skillCDs).forEach(k => { if(this.skillCDs[k] > 0) this.skillCDs[k] -= dtSec; });
 
     // Boost
     let spd = this.speed * (this.zoneSpeed || 1);
@@ -4688,7 +4678,7 @@ function addKillMsg(msg) {
 }
 
 // ── AI names ──
-const AI_NAMES = ['SerpentX','NéoVipr','ByteBoâ','CyberAsp','RoboNaja','GlitchSer','PixelCobra','DataViper','HexPython','QuantumSer','AlphaAnac','ZetaKing','OmegaBoa','TechRattl','WireSnake','BinCobra','MatrixSer','NeonAsp','LazerBoa','RoboRat','CyberKing','HoloVipr','VoidNaja','NanoSer','PlasmaAsp'];
+const AI_NAMES = ['SerpentX','NéoVipr','ByteBoâ','CyberAsp','RoboNaja','GlitchSer','PixelCobra','DataViper','HexPython','QuantumSer','AlphaAnac','ZetaKing','OmegaBoa','TechRattl','WireSnake','BinCobra','MatrixSer','NeonAsp','LazerBoa','RoboRat','CyberKing','HoloVipr','VoidNaja','NanoSer','PlasmaAsp','IronFang','SteelMamba','DarkViper','GhostSer','StormKing','FluxCobra','ShadowBoa','ToxicAsp','VoltNaja','ColdVipr','BladeSnake','NightCobra','BlazeAsp','StrikeKing','PhantomSer','FrostMamba','ShockVipr','GrimBoa','ChaosSer','CrimsonAsp','SilverNaja','BlitzCobra','RiftKing','SteelVipr','WraithSer','CosmicBoa','NovaCobra','AshAsp','FlareNaja','PrismaVipr','ByteMamba','GridSer','VortexKing','FangBot','ReaperX','ShadeCobra','DoomVipr','HexMamba','CipherBoa','PulseNaja','ObsidianSer','SpectrAsp','CrestKing','NullCobra','AbyssBoa','CoreVipr','VenomBotX','GhostMamba','SiegeSer','AcidNaja','IonAsp','StarlancerX','MegaCobra','DreadVipr','ZenithBoa','PeakSer','VexNaja','NecroCobra','ChronoBoa','MirrorVipr','CruxSer','SolAsp','ApexMamba','NightfangX','BoltCobra','SurgeNaja','WarpBoa','DeepVipr','ZeroSer','UltraAsp','GigaKing','TeraCobra','MassVipr','AbsoluteX'];
 
 // ── SCREEN SHAKE ──
 shakeIntensity = 0;
@@ -4932,7 +4922,6 @@ function startGame(mode='battleroyale', realPlayerCount=0) {
   // Spawn les bots D'ABORD, puis le joueur loin de tous les bots via safeSpawn
   const playerName = currentUser ? currentUser.pseudo : 'YOU';
   const playerSkin = (sd && sd.equippedSkin !== undefined && sd.equippedSkin !== null) ? sd.equippedSkin : 0;
-  sd.selectedSkin = playerSkin; // sync selectedSkin pour cohérence interne
 
   const snakes = [];
 
@@ -5060,11 +5049,6 @@ function setupControls() {
     };
   }
   document.addEventListener('pointermove', (e) => {
-    if(IS_MOBILE) return;
-    if(!document.getElementById('gameScreen')?.classList.contains('active')) return;
-    updateMousePos(e.clientX, e.clientY);
-  });
-  document.addEventListener('mousemove', (e) => {
     if(IS_MOBILE) return;
     if(!document.getElementById('gameScreen')?.classList.contains('active')) return;
     updateMousePos(e.clientX, e.clientY);
@@ -5202,7 +5186,6 @@ function gameLoop(timestamp = 0) {
   if(rawDt < 8) return; // skip frames > 120fps (même que serpex)
   lastTime = timestamp;
   const skipLogic = false; // supprimé : causait des micro-freezes de direction sur mobile
-  shouldTick = true;
   const dt = Math.min(rawDt / FRAME_MS, 2.0);
 
   const gs = gameState;
@@ -5293,12 +5276,7 @@ function gameLoop(timestamp = 0) {
       if(z.effect==='speed') { p.zoneSpeed = 1.4; inSpeed = true; }
       if(z.effect==='ghost') {
         p.wallGhostTimer = Math.max(p.wallGhostTimer, 5);
-        // Zone Fantôme : immunité murs pour les bots dans la zone aussi
-        gs.snakes.forEach(s => {
-          if(!s.alive || s.isPlayer) return;
-          const sdx = s.head.x - z.x, sdy = s.head.y - z.y;
-          if(sdx*sdx + sdy*sdy < z.r*z.r) s.wallGhostTimer = Math.max(s.wallGhostTimer||0, 5);
-        });
+        // Bot ghost handled by the independent FIX1 loop below (évite le double apply)
       }
       if(z.effect==='xp' && gs.frame % 60 === 0) {
         p.score += 5; // +5 XP/s pour le joueur
@@ -5583,7 +5561,7 @@ function gameLoop(timestamp = 0) {
             if(victim.shieldActive) continue;
             // Fantôme : immunité traversal — joueur ET bots dans la zone ghost
             const playerIsGhost = (attacker.isPlayer || victim.isPlayer)
-              ? (gs.player.wallGhostTimer > 0 || hasStat('wallGhost'))
+              ? (gs.player && (gs.player.wallGhostTimer > 0 || hasStat('wallGhost')))
               : false;
             const attackerIsGhost = attacker.wallGhostTimer > 0;
             const victimIsGhost   = victim.wallGhostTimer   > 0;
@@ -5595,7 +5573,7 @@ function gameLoop(timestamp = 0) {
               if(victim.isPlayer || victim.isRemotePlayer) {
                 gs.player.kills++;
                 gs.player.score += Math.floor(attacker.length * 2);
-                addKillMsg(`🏆 ${attacker.name} a foncé sur toi ! +${Math.floor(attacker.length*2)} pts`);
+                addKillMsg(`👑 ${attacker.name} a foncé dans ton corps et est mort ! +${Math.floor(attacker.length*2)} pts`);
                 killSnake(attacker, gs, true);
               }
             } else {
@@ -5650,6 +5628,8 @@ function gameLoop(timestamp = 0) {
           gs.player.score += Math.floor(loser.length);
           if (loser.isRemotePlayer) {
             handleRealPlayerKill(loser.remoteUserId, loser.name);
+          } else if (loser.isBoss) {
+            addKillMsg(`👑 Tu as vaincu ${loser.name} tête à tête ! +${Math.floor(loser.length)} pts`);
           } else {
             addKillMsg(`💀 Tu as écrasé ${loser.name} de vitesse !`);
           }
@@ -5764,6 +5744,9 @@ function gameLoop(timestamp = 0) {
   // Draw player indicator if alive
   if(p && p.alive) drawPlayerArrow(ctx);
 
+  // Dessiner les joueurs distants (multijoueur temps réel) — dans le bloc shake
+  drawRemotePlayers(ctx, renderCam);
+
   if(shakeIntensity > 0.1) ctx.restore();
 
   // Level bar
@@ -5773,9 +5756,6 @@ function gameLoop(timestamp = 0) {
   drawWeather(ctx);
 
   // Amis en ligne (mini badge)
-
-  // Dessiner les joueurs distants (multijoueur temps réel)
-  drawRemotePlayers(ctx, renderCam);
 
   // Minimap
   if(!IS_MOBILE || gs.frame % 6 === 0) drawMinimap(mmCtx, gs);
@@ -6179,13 +6159,12 @@ function applyPowerup(snake, type, gs) {
   }
   else if(type.id === 'giant') {
     const origLen  = snake.length;
-    const origSize = snake.size;
     snake.length = Math.min(snake.length * 2.5, 500);
-    snake.size   = (snake.size || 14) * 1.8; // visuellement gros
+    snake._sizeOverride = (snake.size || 14) * 1.8; // visuellement gros
     setTimeout(() => {
       if(snake.alive) {
         snake.length = Math.max(10, origLen);
-        snake.size   = origSize;
+        snake._sizeOverride = null; // restaure le getter dynamique
       }
     }, type.duration * 1000);
   }

@@ -64,13 +64,7 @@
   gtag('set', 'url_passthrough', true);
 </script>
 
-<!-- Google Analytics GA4 — chargé après Consent Mode -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-9Q04XKXKD2"></script>
-<script>
-  gtag('js', new Date());
-  gtag('config', 'G-9Q04XKXKD2');
-</script>
-
+<!-- GA4 chargé uniquement après consentement RGPD via initAnalytics() — ne pas dupliquer ici -->
 <!-- AdSense chargé après consentement RGPD via initAds() — ne pas dupliquer ici -->
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@600&family=Exo+2:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -1552,7 +1546,7 @@ const ALL_SKILLS = [
   { id:'shield',   icon:'🛡️', name:'BOUCLIER',  desc:'Invincible 3s',           cd:15, color:'#00d4ff', free:true,  price:0,   action(p){ p.shieldActive=true; p.shieldTimer=3; addBonus('🛡️ BOUCLIER','3s','#00d4ff'); } },
   { id:'magnet',   icon:'🧲', name:'AIMANT',     desc:'Attire les orbes 5s',     cd:20, color:'#ffd700', free:true,  price:0,   action(p){ p.magnetActive=true; p.magnetTimer=5; addBonus('🧲 AIMANT','5s','#ffd700'); } },
   { id:'turbo',    icon:'🚀', name:'TURBO',      desc:'Vitesse x2 pendant 4s',   cd:18, color:'#ff8800', free:true,  price:0,   action(p){ p.turboTimer=4; addBonus('🚀 TURBO','4s','#ff8800'); } },
-  { id:'bomb',     icon:'💣', name:'BOMBE',      desc:'Explose ennemis proches', cd:30, color:'#ff006e', free:true,  price:0,   action(p){ gameState.snakes.forEach(s=>{if(s===p||!s.alive)return;const dx=p.head.x-s.head.x,dy=p.head.y-s.head.y;if(Math.sqrt(dx*dx+dy*dy)<200)killSnake(s,gameState,true);}); showNotif('💣 BOMBE !'); } },
+  { id:'bomb',     icon:'💣', name:'BOMBE',      desc:'Explose ennemis proches', cd:30, color:'#ff006e', free:true,  price:0,   action(p){ gameState.snakes.forEach(s=>{if(s===p||!s.alive)return;if(s.isBoss)return;const dx=p.head.x-s.head.x,dy=p.head.y-s.head.y;if(Math.sqrt(dx*dx+dy*dy)<200)killSnake(s,gameState,true);}); showNotif('💣 BOMBE !'); } },
   // ── PAYANTS ──
   { id:'ghost',    icon:'👻', name:'FANTÔME',    desc:'Traverse les murs 5s',    cd:25, color:'#bf00ff', free:false, price:300, action(p){ p.wallGhostTimer=5; addBonus('👻 FANTÔME','5s','#bf00ff'); } },
   { id:'overload', icon:'⚡', name:'SURCHARGE',  desc:'Score x2 pendant 10s',    cd:40, color:'#ffd700', free:false, price:400, action(p){ p.overloadTimer=10; addBonus('⚡ SURCHARGE','10s','#ffd700'); } },
@@ -2138,6 +2132,8 @@ function _showGameOverSW(gs) {
   const _prevBestScore = sd.bestScore || 0; // snapshot AVANT mise à jour
   if(p.score > _prevBestScore) sd.bestScore = p.score;
   sd.totalKills = (sd.totalKills || 0) + p.kills;
+  // Flush coins gagnés en jeu (zones, niveaux, kills) vers le solde permanent
+  if(gs.coins > 0) sd.coins = (sd.coins || 0) + gs.coins;
   saveSD();
   refreshMenu();
   // Remplir l'écran de mort SnakeWars
@@ -3896,37 +3892,6 @@ class Snake {
     this.angle+=Math.max(-turnSpeed,Math.min(turnSpeed,diff));
     this.ai_targetAngle=desiredAngle;
   }
-  useSkill(name) {
-    if(!this.isPlayer) return;
-    if(this.skillCDs[name] > 0) return;
-
-    if(name === 'shield') {
-      const dur = 3 + hasStat('shieldDur');
-      this.shieldActive = true;
-      this.shieldTimer = dur;
-      this.skillCDs.shield = 15;
-      addBonus('🛡️ BOUCLIER', `${dur}s`, 'var(--neon-cyan)');
-    }
-    if(name === 'magnet') {
-      const range = (hasStat('magnetRange') || 1) > 1 ? 2 : 1;
-      this.magnetActive = true;
-      this.magnetTimer = 5;
-      this.skillCDs.magnet = 20;
-      addBonus('🧲 AIMANT', '5s', 'var(--neon-gold)');
-    }
-    if(name === 'bomb' && this.skillCDs.bomb <= 0) {
-      // Explode nearby snakes
-      gameState.snakes.forEach(s => {
-        if(s === gameState.player || !s.alive) return;
-        if(this.head.dist(s.head) < 200) {
-          killSnake(s, gameState, true);
-        }
-      });
-      this.skillCDs.bomb = 30;
-      showNotif('💣 BOMBE !');
-    }
-  }
-
   draw(ctx, cam) {
     if(!this.alive || this.path.length < 2) return;
     const skinData   = getSkin(this.skin);
@@ -4846,6 +4811,8 @@ function resetAllGameState() {
   brZoneCY        = WORLD / 2;
   brPrevZoneCX    = WORLD / 2;
   brPrevZoneCY    = WORLD / 2;
+  brNextZoneCX    = WORLD / 2;
+  brNextZoneCY    = WORLD / 2;
 
   // Réseau
   stopPositionSync();
@@ -5185,7 +5152,6 @@ function gameLoop(timestamp = 0) {
   const rawDt = timestamp - lastTime;
   if(rawDt < 8) return; // skip frames > 120fps (même que serpex)
   lastTime = timestamp;
-  const skipLogic = false; // supprimé : causait des micro-freezes de direction sur mobile
   const dt = Math.min(rawDt / FRAME_MS, 2.0);
 
   const gs = gameState;
@@ -5193,8 +5159,7 @@ function gameLoop(timestamp = 0) {
 
   try {
 
-  // ── LOGIQUE : seulement si pas skipLogic ──
-  if(!skipLogic) {
+  // ── LOGIQUE ──
   gs.frame++;
 
   // Interpoler les joueurs distants
@@ -5247,9 +5212,9 @@ function gameLoop(timestamp = 0) {
   updateWeather(gs);
 
   // ── BATTLE ROYALE ──
-  if(brActive) updateBattleRoyale(gs);
-  // Init BR au frame 1
+  // Init BR au frame 1 — AVANT le premier updateBattleRoyale
   if(gs.frame === 1 && lobbyPendingMode === 'battleroyale') initBattleRoyale(gs);
+  if(brActive) updateBattleRoyale(gs);
 
   // ── LAST SEEN toutes les 5min ──
 
@@ -5283,7 +5248,7 @@ function gameLoop(timestamp = 0) {
       }
       if(z.effect==='coins' && gs.frame % 60 === 0) {
         gs.coins += 1;
-        sd.coins = (sd.coins || 0) + 1;
+        // sd.coins flush différé à showGameOver
         spawnScorePopup('+1🪙', p.head);
       }
       if(z.effect==='danger' && !p.shieldActive) {
@@ -5660,13 +5625,11 @@ function gameLoop(timestamp = 0) {
   );
   gs.lastCam = cam;
 
-  } // fin if(!skipLogic)
-
   // (wall collision now handled directly inside snake.update())
 
   // Cam toujours dispo pour le rendu (lastCam initialisé dès la 1ère frame logique)
   const renderCam = gs.lastCam || new Vec2(WORLD/2, WORLD/2);
-  const p = gs.player; // alias local pour le rendu
+  // p déjà déclaré plus haut (alias gs.player)
 
   // ── RENDER — toujours exécuté, même sur mobile ──
   // Screen shake
@@ -5764,16 +5727,14 @@ function gameLoop(timestamp = 0) {
   updateHUD(gs);
 
   // Active bonus timers
-  if(!skipLogic) {
   activeBonuses = activeBonuses.filter(b => {
     b.timer -= dt/60;
     if(b.timer <= 0) { b.el.remove(); return false; }
     return true;
   });
-  }
 
   // Skill cooldowns
-  if(p) updateSkillUI(p);
+  if(p) updateSkillUI(p, dt);
 
   // ── Collisions avec les vrais joueurs distants (Ably) ──
   if(p && p.alive && !p.shieldActive && !gs.gameOverTriggered) {
@@ -5829,6 +5790,16 @@ function gameLoop(timestamp = 0) {
   }
 }
 
+// Zone descriptions — constante module, non recréée à chaque frame
+const ZONE_DESC = {
+  speed:  '+40% VITESSE',
+  danger: '☠️ -12 ÉNERGIE + RALENTI',
+  coins:  '+1 COIN/SEC',
+  ghost:  'TRAVERSE MURS 5s',
+  xp:     '+5 XP/s',
+  heal:   '+8 ÉNERGIE/3s',
+};
+
 function drawZones(ctx, cam) {
   // ⚠️ AUCUN skip par frame — on utilise Date.now() pour l'animation, jamais gameState.frame
   // Cela garantit ZÉRO clignotement sur mobile ET desktop
@@ -5847,14 +5818,6 @@ function drawZones(ctx, cam) {
     ghost:  [180, 180, 255],
     xp:     [191, 0,   255],
     heal:   [57,  255, 20 ],
-  };
-  const ZONE_DESC = {
-    speed:  '+40% VITESSE',
-    danger: '☠️ -12 ÉNERGIE + RALENTI',
-    coins:  '+1 COIN/SEC',
-    ghost:  'TRAVERSE MURS 5s',
-    xp:     '+5 XP/s',
-    heal:   '+8 ÉNERGIE/3s',
   };
 
   ZONES.forEach(z => {
@@ -6204,6 +6167,7 @@ function applyPowerup(snake, type, gs) {
 }
 
 function spawnScorePopup(text, worldPos) {
+  if(!worldPos || !gameState || !gameState.player) return;
   const cam = gameState.lastCam || gameState.player.head;
   const sx = worldPos.x - cam.x + canvas.width/2;
   const sy = worldPos.y - cam.y + canvas.height/2;
@@ -6255,13 +6219,13 @@ function toggleLeaderboard() {
   document.getElementById('lbExtra').classList.toggle('open', lbOpen);
 }
 
-function updateSkillUI(p) {
+function updateSkillUI(p, dt) {
   for (let i = 0; i < 3; i++) {
     const cdEl = document.getElementById('skillCd' + i);
     const btn  = document.getElementById('skillBtn' + i);
     if (!cdEl) continue;
     if (buildSkillCDs[i] > 0) {
-      buildSkillCDs[i] = Math.max(0, buildSkillCDs[i] - 1/60);
+      buildSkillCDs[i] = Math.max(0, buildSkillCDs[i] - dt/60);
       cdEl.style.display = 'flex';
       cdEl.textContent = Math.ceil(buildSkillCDs[i]);
       if (btn) btn.classList.add('on-cd');

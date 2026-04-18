@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'unsafe-inline' https://cdn.ably.com https://www.googletagmanager.com https://pagead2.googlesyndication.com https://www.google-analytics.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.ably.io wss://*.ably.io https://ipapi.co https://pagead2.googlesyndication.com https://www.google-analytics.com; frame-src https://googleads.g.doubleclick.net https://tpc.googlesyndication.com; object-src 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'unsafe-inline' https://cdn.ably.com https://www.googletagmanager.com https://pagead2.googlesyndication.com https://www.google-analytics.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.ably.io wss://*.ably.io https://realtime.ably.com wss://realtime.ably.com https://ipapi.co https://pagead2.googlesyndication.com https://www.google-analytics.com; frame-src https://googleads.g.doubleclick.net https://tpc.googlesyndication.com; object-src 'none';">
 <script>
 (function(){
   const m={"name":"SnakeWars.io \u2014 Battle Royale","short_name":"SnakeWars","description":"Jeu de serpent Battle Royale multijoueur. 100 joueurs, sans inscription, 100% gratuit.","start_url":"./index.html","display":"standalone","orientation":"portrait","background_color":"#050810","theme_color":"#00f5ff","lang":"fr","scope":"./","categories":["games","entertainment"],"icons":[{"src":"icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},{"src":"icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}],"screenshots":[{"src":"preview.png","sizes":"1200x630","type":"image/png","label":"SnakeWars Battle Royale"}],"shortcuts":[{"name":"Jouer maintenant","short_name":"Jouer","description":"Lancer une partie Battle Royale","url":"./index.html","icons":[{"src":"icon-192.png","sizes":"192x192"}]}]};
@@ -76,6 +76,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@600&family=Exo+2:wght@400;600&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--sab:env(safe-area-inset-bottom,0px)}
 html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:'Exo 2',sans-serif;color:#fff}
 .screen{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;z-index:10}
 .screen.active{display:flex}
@@ -1541,7 +1542,7 @@ const ALL_SKILLS = [
   // ── PAYANTS ──
   { id:'ghost',    icon:'👻', name:'FANTÔME',    desc:'Traverse les murs 5s',    cd:25, color:'#bf00ff', free:false, price:300, action(p){ p.wallGhostTimer=5; addBonus('👻 FANTÔME','5s','#bf00ff'); } },
   { id:'overload', icon:'⚡', name:'SURCHARGE',  desc:'Score x2 pendant 10s',    cd:40, color:'#ffd700', free:false, price:400, action(p){ p.overloadTimer=10; addBonus('⚡ SURCHARGE','10s','#ffd700'); } },
-  { id:'teleport', icon:'🌀', name:'TÉLÉPORT',   desc:'Propulsé en avant 200px', cd:22, color:'#00d4ff', free:false, price:350, action(p){ const a=p.angle||0; p.head.x+=Math.cos(a)*200; p.head.y+=Math.sin(a)*200; showNotif('🌀 TÉLÉPORT !'); } },
+  { id:'teleport', icon:'🌀', name:'TÉLÉPORT',   desc:'Propulsé en avant 200px', cd:22, color:'#00d4ff', free:false, price:350, action(p){ const a=p.angle||0; p.path[0].x=Math.max(50,Math.min(WORLD-50,p.path[0].x+Math.cos(a)*200)); p.path[0].y=Math.max(50,Math.min(WORLD-50,p.path[0].y+Math.sin(a)*200)); showNotif('🌀 TÉLÉPORT !'); } },
   { id:'virus',    icon:'☠️', name:'VIRUS',      desc:'Ralentit ennemis proches',cd:35, color:'#39ff14', free:false, price:450, action(p){ gameState.snakes.forEach(s=>{if(s===p||!s.alive)return;const dx=p.head.x-s.head.x,dy=p.head.y-s.head.y;if(Math.sqrt(dx*dx+dy*dy)<250)s.virusTimer=5;}); showNotif('☠️ VIRUS !'); } },
 ];
 let buildSkillCDs = [0, 0, 0];
@@ -1561,13 +1562,19 @@ function saveNow(sync){ saveSD(); return Promise.resolve(); }
 const ABLY_KEY = '_P3_-A.raZBvA:bDB21v5v5HFbcR2MqKAVcR0fc1QyGJlNz46UgJZOW1c';
 // ── Sélection automatique du serveur régional ──
 async function detectRegion() {
+  // Cache 24h pour éviter de saturer le quota ipapi.co (1000 req/jour gratuit)
+  try {
+    const cached   = localStorage.getItem('sw_region');
+    const cachedTs = parseInt(localStorage.getItem('sw_region_ts') || '0');
+    if (cached && Date.now() - cachedTs < 86400000) return cached;
+  } catch(e) {}
   try {
     const r = await fetch('https://ipapi.co/json/', {signal: AbortSignal.timeout(3000)});
     const d = await r.json();
     const c = d.continent_code || 'EU';
-    if(c === 'NA' || c === 'SA') return 'NA';
-    if(c === 'AS' || c === 'OC') return 'AS';
-    return 'EU';
+    const region = (c === 'NA' || c === 'SA') ? 'NA' : (c === 'AS' || c === 'OC') ? 'AS' : 'EU';
+    try { localStorage.setItem('sw_region', region); localStorage.setItem('sw_region_ts', Date.now().toString()); } catch(e) {}
+    return region;
   } catch(e) { return 'EU'; }
 }
 let ROOM_ID = 'snakewars-arena-EU'; // Défaut Europe
@@ -1611,7 +1618,7 @@ function startPositionSync() {
   myPlayerId = generatePlayerId();
 
   try {
-    ablyClient = new Ably.Realtime({ key: ABLY_KEY });
+    ablyClient = new Ably.Realtime({ key: ABLY_KEY, useBinaryProtocol: true, closeOnUnload: true });
     ablyChannel = ablyClient.channels.get(ROOM_ID);
 
     // S'abonner aux positions des autres joueurs
@@ -1688,7 +1695,7 @@ function startPositionSync() {
         boosting: p.boosting || false,
         time:     Date.now()          // ← horodatage pour l'interpolation
       });
-    }, 80);
+    }, 100); // 100ms = 10 msg/s — bon équilibre fluidité/quota Ably
 
     console.log('[SnakeWars] Ably connecté — salle:', ROOM_ID);
 
@@ -1729,22 +1736,25 @@ function interpolateRemotePlayers() {
     // Supprimer les joueurs inactifs depuis plus de 3 secondes
     if (now - rp.lastUpdate > 3000) { delete remotePlayers[id]; continue; }
 
-    // RENDER_DELAY adaptatif : 1.5× le jitter mesuré, entre 60ms et 180ms
-    const RENDER_DELAY = Math.min(180, Math.max(60, (rp.avgJitter || 80) * 1.5));
+    // RENDER_DELAY adaptatif : 1.5× le jitter mesuré, entre 40ms et 180ms
+    const RENDER_DELAY = Math.min(180, Math.max(40, (rp.avgJitter || 80) * 1.5));
 
     const buf = rp.buffer;
 
     // Buffer insuffisant : extrapolation basique depuis la dernière position connue
+    // _extrapolated guard : on n'extrapole qu'UNE seule fois par snapshot (sinon dt croit à chaque frame → fuite infinie)
     if (buf.length < 2) {
-      if (rp.head && rp.lastAngle !== undefined && rp.lastSpeed) {
-        const dt = Math.min((now - rp.lastUpdate) / 1000, 0.15); // cap 150ms
+      if (rp.head && rp.lastAngle !== undefined && rp.lastSpeed && !rp._extrapolated) {
+        const dt = Math.min((now - rp.lastUpdate) / 1000, 0.25); // cap 250ms
         rp.head = {
           x: rp.head.x + Math.cos(rp.lastAngle) * rp.lastSpeed * dt * 60,
           y: rp.head.y + Math.sin(rp.lastAngle) * rp.lastSpeed * dt * 60
         };
+        rp._extrapolated = true; // bloquer jusqu'au prochain snapshot
       }
       continue;
     }
+    rp._extrapolated = false; // nouveau snapshot reçu → autoriser une prochaine extrapolation
 
     const renderTime = now - RENDER_DELAY;
 
@@ -2589,15 +2599,7 @@ function updateWeather(gs) {
       }));
     }
   }
-
-  // Apply wind to food — 1 frame/6 pour économiser CPU
-  if((currentWeather.windX || currentWeather.windY) && gs && gs.frame % 6 === 0) {
-    const wx6 = currentWeather.windX * 1.8, wy6 = currentWeather.windY * 1.8;
-    gs.foods.forEach(f => {
-      f.pos.x = Math.max(10, Math.min(WORLD-10, f.pos.x + wx6));
-      f.pos.y = Math.max(10, Math.min(WORLD-10, f.pos.y + wy6));
-    });
-  }
+  // NOTE: le vent sur les foods est géré dans gameLoop (évite le double-apply)
 }
 
 function drawWeather(ctx) {
@@ -3172,7 +3174,7 @@ function drawParticles(ctx, cam) {
     ctx.beginPath();
     ctx.arc(wx, wy, p.size*p.life, 0, Math.PI*2);
     ctx.fillStyle = p.color;
-    ctx.shadowColor = p.color; ctx.shadowBlur = 8;
+    if(GLOW_ON) { ctx.shadowColor = p.color; ctx.shadowBlur = 8; }
     ctx.fill(); ctx.shadowBlur=0;
   });
   ctx.globalAlpha=1;
@@ -4677,6 +4679,8 @@ function resetAllGameState() {
   brPrevZoneCY    = WORLD / 2;
   brNextZoneCX    = WORLD / 2;
   brNextZoneCY    = WORLD / 2;
+  brPlayerRank    = 0;        // FIX: évite rang erroné si le joueur rejoue hors BR
+  brEliminationOrder = [];    // FIX: podium propre à chaque nouvelle partie
 
   // Réseau
   stopPositionSync();
@@ -4745,7 +4749,9 @@ function startGame(mode='battleroyale', realPlayerCount=0) {
   showScreen('gameScreen');
 
   canvas.width = window.innerWidth;
-  canvas.height = IS_MOBILE ? window.innerHeight - 160 : window.innerHeight;
+  // Safe area iOS : env(safe-area-inset-bottom) via CSS var --sab, fallback 0
+  const _safeBottom = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sab') || '0') || 0;
+  canvas.height = IS_MOBILE ? window.innerHeight - 160 - _safeBottom : window.innerHeight;
   mmCanvas.width = 90;
   mmCanvas.height = 90;
 
@@ -5202,6 +5208,9 @@ function gameLoop(timestamp = 0) {
     boss.ai_behavior = bt.behavior;
     boss._aggressionLevel = 1.0;
     boss.size = 13 * (bt.size || 1.0); // FIX 3 : taille réduite (était 18)
+    // Purger les anciens bosses morts avant d'en spawner un nouveau (évite accumulation en mémoire)
+    const _deadBossIdx = gs.snakes.findIndex(s => s.isBoss && !s.alive);
+    if (_deadBossIdx !== -1) gs.snakes.splice(_deadBossIdx, 1);
     gs.snakes.push(boss);
     bossAlive = true;
     showBossAnnounce(bt);
@@ -5258,14 +5267,18 @@ function gameLoop(timestamp = 0) {
   gs.powerups.forEach(p => p.update(dt));
   updateParticles();
 
-  // Magnet: attract food
+  // Magnet: attract food — arithmétique inline, zéro Vec2 alloué
   if(p.alive && p.magnetActive) {
     const range = 150 * (hasStat('magnetRange') > 1 ? 2 : 1);
+    const range2 = range * range;
+    const phx = p.head.x, phy = p.head.y;
     gs.foods.forEach(f => {
-      const d = p.head.dist(f.pos);
-      if(d < range && d > 5) {
-        const pull = p.head.sub(f.pos).norm().scale(3);
-        f.pos = f.pos.add(pull);
+      const fdx = phx - f.pos.x, fdy = phy - f.pos.y;
+      const fd2 = fdx*fdx + fdy*fdy;
+      if(fd2 < range2 && fd2 > 25) {
+        const fd = Math.sqrt(fd2);
+        f.pos.x += (fdx/fd) * 3;
+        f.pos.y += (fdy/fd) * 3;
       }
     });
   }
@@ -5461,21 +5474,18 @@ function gameLoop(timestamp = 0) {
     }
   }
 
-  // Camera — lag doux (lerp) : sensation de poids et de vitesse
-  const rawCam = p.alive ? p.head : (gs.lastCam || new Vec2(WORLD/2, WORLD/2));
+  // Camera — lag doux (lerp) : sensation de poids et de vitesse — réutilise gs.lastCam en place (zéro Vec2 alloué)
+  const rawCam = p.alive ? p.head : (gs.lastCam || { x: WORLD/2, y: WORLD/2 });
   const halfW = canvas.width  * 0.5;
   const halfH = canvas.height * 0.5;
-  const targetCam = new Vec2(
-    Math.max(halfW, Math.min(WORLD - halfW, rawCam.x)),
-    Math.max(halfH, Math.min(WORLD - halfH, rawCam.y))
-  );
+  const targetCamX = Math.max(halfW, Math.min(WORLD - halfW, rawCam.x));
+  const targetCamY = Math.max(halfH, Math.min(WORLD - halfH, rawCam.y));
   const camLerp = p.alive && p.boosting ? 0.08 : 0.12;
-  const prevCam = gs.lastCam || targetCam;
-  const cam = new Vec2(
-    prevCam.x + (targetCam.x - prevCam.x) * camLerp * dt,
-    prevCam.y + (targetCam.y - prevCam.y) * camLerp * dt
-  );
-  gs.lastCam = cam;
+  if (!gs.lastCam) gs.lastCam = { x: targetCamX, y: targetCamY };
+  else {
+    gs.lastCam.x += (targetCamX - gs.lastCam.x) * camLerp * dt;
+    gs.lastCam.y += (targetCamY - gs.lastCam.y) * camLerp * dt;
+  }
 
   // (wall collision now handled directly inside snake.update())
 
@@ -5590,6 +5600,8 @@ function gameLoop(timestamp = 0) {
 
   // ── Collisions avec les vrais joueurs distants (Ably) ──
   if(p && p.alive && !p.shieldActive && !gs.gameOverTriggered) {
+    // Ghost : un joueur fantôme est intouchable ET ne peut pas tuer les distants
+    if(p.wallGhostTimer <= 0 && !hasStat('wallGhost')) {
     const pSize = p.size || 8;
     for (const id in remotePlayers) {
       const rp = remotePlayers[id];
@@ -5623,6 +5635,7 @@ function gameLoop(timestamp = 0) {
         }
       }
     }
+    } // fin ghost check
   }
 
   // Game over check
@@ -6020,6 +6033,9 @@ function applyPowerup(snake, type, gs) {
 
 function spawnScorePopup(text, worldPos) {
   if(!worldPos || !gameState || !gameState.player) return;
+  // Limiter les popups simultanés (évite les mutations DOM excessives pendant le magnet)
+  const existing = document.getElementById('gameScreen')?.querySelectorAll('.score-popup');
+  if(existing && existing.length >= 12) return;
   const cam = gameState.lastCam || gameState.player.head;
   const sx = worldPos.x - cam.x + canvas.width/2;
   const sy = worldPos.y - cam.y + canvas.height/2;
@@ -6038,7 +6054,8 @@ function updateHUD(gs) {
   const p = gs.player;
   const lenEl = document.getElementById('hLen');
   if(lenEl) lenEl.textContent = p.score.toLocaleString();
-  document.getElementById('energyBar').style.width = p.energy + '%';
+  const eBar = document.getElementById('energyBar');
+  if(eBar) eBar.style.width = p.energy + '%';
   const hKillsEl = document.getElementById('hKills');
   if(hKillsEl) hKillsEl.textContent = p.kills;
 
@@ -6269,14 +6286,20 @@ function drawNeonGrid(ctx, camX, camY, w, h) {
   ctx.save();
   ctx.strokeStyle = `rgba(0,245,255,${pulse})`;
   ctx.lineWidth = 0.4;
+  // Toutes les verticales en un seul stroke
+  ctx.beginPath();
   const startX = Math.floor(camX / gridSize) * gridSize;
-  const startY = Math.floor(camY / gridSize) * gridSize;
   for (let x = startX; x < camX + w + gridSize; x += gridSize) {
-    ctx.beginPath(); ctx.moveTo(x - camX, 0); ctx.lineTo(x - camX, h); ctx.stroke();
+    ctx.moveTo(x - camX, 0); ctx.lineTo(x - camX, h);
   }
+  ctx.stroke();
+  // Toutes les horizontales en un seul stroke
+  ctx.beginPath();
+  const startY = Math.floor(camY / gridSize) * gridSize;
   for (let y = startY; y < camY + h + gridSize; y += gridSize) {
-    ctx.beginPath(); ctx.moveTo(0, y - camY); ctx.lineTo(w, y - camY); ctx.stroke();
+    ctx.moveTo(0, y - camY); ctx.lineTo(w, y - camY);
   }
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -6535,7 +6558,7 @@ window.addEventListener('DOMContentLoaded',()=>{
 if('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     const swCode = `
-const CACHE = 'snakewars-v1';
+const CACHE = 'snakewars-v2';
 self.addEventListener('install', e => { self.skipWaiting(); });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));

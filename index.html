@@ -5591,12 +5591,12 @@ function gameLoop(timestamp = 0) {
             if(attacker.isPlayer) {
               killSnake(attacker, gs);
             } else if(attacker.isBoss) {
-              // ── BOSS IMMUNITÉ CORPS : le boss tue le bot au lieu de mourir ──
-              if(!victim.isBoss && !victim.isPlayer && !victim.isRemotePlayer) {
-                killSnake(victim, gs, false);
-              } else if(victim.isPlayer || victim.isRemotePlayer) {
-                // Boss tue le joueur qui fonce dans son corps
-                killSnake(victim, gs, false);
+              // Boss fonce dans le corps du joueur → boss meurt (tête = celui qui meurt)
+              if(victim.isPlayer || victim.isRemotePlayer) {
+                gs.player.kills++;
+                gs.player.score += Math.floor(attacker.length * 2);
+                addKillMsg(`🏆 ${attacker.name} a foncé sur toi ! +${Math.floor(attacker.length*2)} pts`);
+                killSnake(attacker, gs, true);
               }
             } else {
               if(victim.isPlayer) {
@@ -5638,10 +5638,10 @@ function gameLoop(timestamp = 0) {
         }
         // ── FIX 2 : FANTÔME — immunité ghost pour bots/boss aussi ──
         if(sA.wallGhostTimer > 0 || sB.wallGhostTimer > 0) continue;
-        // Boss gagne TOUJOURS contre un bot (même si plus petit)
+        // Boss vs joueur tête-à-tête : basé sur la longueur (joueur peut gagner)
         let aWins;
-        if(sA.isBoss && !sB.isBoss) aWins = true;
-        else if(sB.isBoss && !sA.isBoss) aWins = false;
+        if(sA.isBoss && !sB.isBoss && !sB.isPlayer && !sB.isRemotePlayer) aWins = true;
+        else if(sB.isBoss && !sA.isBoss && !sA.isPlayer && !sA.isRemotePlayer) aWins = false;
         else aWins = sA.length >= sB.length;
         const loser = aWins ? sB : sA;
         const winner = aWins ? sA : sB;

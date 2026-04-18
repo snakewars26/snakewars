@@ -39,8 +39,9 @@
 <meta name="twitter:title" content="SnakeWars.io — Jeu de Serpent Battle Royale">
 <meta name="twitter:description" content="Le jeu de serpent Battle Royale multijoueur ! Gratuit sur navigateur.">
 <meta name="twitter:image" content="https://snakewars26.github.io/snakewars/preview.png">
-<!-- Google AdSense — chargé après consentement RGPD via initAds() uniquement -->
+<!-- Google AdSense -->
 <meta name="google-adsense-account" content="ca-pub-5433648295830648">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5433648295830648" crossorigin="anonymous"></script>
 <!-- Ably Realtime SDK -->
 <script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
 
@@ -63,7 +64,14 @@
   gtag('set', 'url_passthrough', true);
 </script>
 
-<!-- Google Analytics GA4 — chargé après consentement RGPD via initAnalytics() uniquement -->
+<!-- Google Analytics GA4 — chargé après Consent Mode -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-9Q04XKXKD2"></script>
+<script>
+  gtag('js', new Date());
+  gtag('config', 'G-9Q04XKXKD2');
+</script>
+
+<!-- AdSense chargé après consentement RGPD via initAds() — ne pas dupliquer ici -->
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@600&family=Exo+2:wght@400;600&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -2139,7 +2147,6 @@ function _showGameOverSW(gs) {
   if(Math.floor(p.length) > (sd.bestLen || 0)) sd.bestLen = Math.floor(p.length);
   const _prevBestScore = sd.bestScore || 0; // snapshot AVANT mise à jour
   if(p.score > _prevBestScore) sd.bestScore = p.score;
-  sd.lastScore = p.score; // score de la dernière partie (pour l'overlay pub)
   sd.totalKills = (sd.totalKills || 0) + p.kills;
   saveSD();
   refreshMenu();
@@ -2649,7 +2656,7 @@ function playGameMusic() {
 
 function toggleMusic() {
   musicEnabled = !musicEnabled;
-  if(musicEnabled) { const _gEl = document.getElementById('gameScreen'); startMusic(_gEl && _gEl.classList.contains('active') ? 'game' : 'menu'); }
+  if(musicEnabled) { const _gEl = document.getElementById('game'); startMusic(_gEl && _gEl.classList.contains('active') ? 'game' : 'menu'); }
   else stopMusic();
   updateAudioBtns();
 }
@@ -2672,8 +2679,57 @@ function updateAudioBtns() {
 let joystick = { active:false, baseX:0, baseY:0, dx:0, dy:0, id:null };
 
 function setupJoystick() {
-  // Joystick virtuel remplacé par le système slide-to-direct (touchPos sur canvas)
-  // Le joystick object reste déclaré pour compatibilité avec le code de direction
+  return; // joystick supprimé
+  const jBase = document.getElementById('joystickBase');
+  const jThumb = document.getElementById('joystickThumb');
+  if(!jBase) return;
+
+  function onJoyStart(e) {
+    // Ignorer si le touch commence sur un bouton (boost, skills, HUD)
+    const target = e.target;
+    if(target.closest('.boost-btn') || target.closest('.skill-btn') || target.closest('.hud') || target.closest('#lb')) return;
+    resumeAudio();
+    const touch = e.touches ? e.touches[0] : e;
+    joystick.active = true;
+    joystick.id = e.touches ? e.touches[0].identifier : null;
+    joystick.baseX = touch.clientX;
+    joystick.baseY = touch.clientY;
+    jBase.style.left = (touch.clientX - 45) + 'px';
+    jBase.style.top  = (touch.clientY - 45) + 'px';
+    jBase.style.opacity = '1';
+  }
+
+  function onJoyMove(e) {
+    if(!joystick.active) return;
+    let touch = null;
+    if(e.touches) {
+      for(let t of e.touches) { if(t.identifier === joystick.id) { touch=t; break; } }
+    } else touch = e;
+    if(!touch) return;
+    const dx = touch.clientX - joystick.baseX;
+    const dy = touch.clientY - joystick.baseY;
+    const dist = Math.sqrt(dx*dx+dy*dy);
+    const maxR = 40;
+    const clamp = Math.min(dist, maxR);
+    const angle = Math.atan2(dy, dx);
+    joystick.dx = Math.cos(angle) * (clamp/maxR);
+    joystick.dy = Math.sin(angle) * (clamp/maxR);
+    jThumb.style.transform = `translate(${Math.cos(angle)*clamp}px, ${Math.sin(angle)*clamp}px)`;
+  }
+
+  function onJoyEnd(e) {
+    joystick.active = false; joystick.dx = 0; joystick.dy = 0;
+    jBase.style.opacity = '0';
+    jThumb.style.transform = 'translate(0,0)';
+  }
+
+  const gameEl = document.getElementById('gameScreen');
+  if(gameEl) {
+    gameEl.addEventListener('touchstart',  onJoyStart, {passive:false});
+    gameEl.addEventListener('touchmove',   onJoyMove,  {passive:false});
+    gameEl.addEventListener('touchend',    onJoyEnd,   {passive:false});
+    gameEl.addEventListener('touchcancel', onJoyEnd,   {passive:false});
+  }
 }
 
 // initInput appelé au DOMContentLoaded
@@ -3392,13 +3448,13 @@ class Snake {
     // Timers
     // Timers basés sur dt — corrects à 30fps ET 60fps
     const dtSec = dt / 60; // dt est normalisé à 60fps, donc /60 = secondes réelles
-    if(this.shieldTimer > 0) { this.shieldTimer -= dtSec; if(this.shieldTimer <= 0) { this.shieldActive = false; this.spawnImmune = false; } }
+    if(this.shieldTimer > 0) { this.shieldTimer -= 1/60; if(this.shieldTimer <= 0) { this.shieldActive = false; this.spawnImmune = false; } }
     if(this.magnetTimer > 0) { this.magnetTimer -= dtSec; if(this.magnetTimer <= 0) this.magnetActive = false; }
     if(this.turboTimer    > 0) this.turboTimer    -= dtSec;
     if(this.overloadTimer > 0) this.overloadTimer -= dtSec;
     if(this.virusTimer    > 0) this.virusTimer    -= dtSec;
     if(this.wallGhostTimer> 0) this.wallGhostTimer -= dtSec;
-    Object.keys(this.skillCDs).forEach(k => { if(this.skillCDs[k] > 0) this.skillCDs[k] -= dtSec; });
+    Object.keys(this.skillCDs).forEach(k => { if(this.skillCDs[k] > 0) this.skillCDs[k] -= 1/60; });
 
     // Boost
     let spd = this.speed * (this.zoneSpeed || 1);
@@ -4242,11 +4298,11 @@ class Snake {
     const aura = this.bossAura    || '255,0,0';
     const glow = this.bossGlow    || '#ff0000';
     const crown= this.bossCrown   || '👹';
-    const sz   = this.size || 18;
+    const sz   = this.size || 13;
+    const eid  = this.bossEffectId || crown; // FIX 4 : identifiant d'effet
 
     // ── 1. DOUBLE AURA PULSANTE ──
     if(GLOW_ON) {
-      // Aura extérieure lente
       const auraR1 = sz + 18 + Math.sin(t*1.5)*6;
       const grad1 = ctx.createRadialGradient(hw,hy,sz,hw,hy,auraR1);
       grad1.addColorStop(0,`rgba(${aura},0.18)`);
@@ -4254,7 +4310,6 @@ class Snake {
       ctx.beginPath(); ctx.arc(hw,hy,auraR1,0,Math.PI*2);
       ctx.fillStyle=grad1; ctx.fill();
 
-      // Aura intérieure rapide
       const auraR2 = sz + 8 + Math.sin(t*4)*3;
       const grad2 = ctx.createRadialGradient(hw,hy,sz*0.5,hw,hy,auraR2);
       grad2.addColorStop(0,`rgba(${aura},0.35)`);
@@ -4263,6 +4318,138 @@ class Snake {
       ctx.fillStyle=grad2; ctx.fill();
     }
 
+    // ── FIX 4 : EFFETS TERRIFIANTS PAR TYPE ──
+    ctx.save();
+    if(eid === '👹') {
+      // TITAN : fissures rouges crépitantes autour de la tête
+      for(let i=0;i<8;i++){
+        const a = (i/8)*Math.PI*2 + t*1.2;
+        const cracklLen = sz*0.9 + Math.sin(t*7+i)*sz*0.5;
+        const x1 = hw + Math.cos(a)*(sz+2), y1 = hy + Math.sin(a)*(sz+2);
+        const x2 = hw + Math.cos(a)*cracklLen, y2 = hy + Math.sin(a)*cracklLen;
+        const mx = (x1+x2)/2 + (Math.random()-.5)*sz*0.4;
+        const my = (y1+y2)/2 + (Math.random()-.5)*sz*0.4;
+        ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(mx,my); ctx.lineTo(x2,y2);
+        ctx.strokeStyle=`rgba(255,${(30+Math.random()*80)|0},0,${0.55+Math.sin(t*9+i)*0.3})`;
+        ctx.lineWidth=1.2; ctx.shadowColor='#ff2200'; ctx.shadowBlur=GLOW_ON?10:0;
+        ctx.stroke();
+      }
+    } else if(eid === '🐉') {
+      // DRAGON : souffle de feu — arc de particules devant la tête
+      const ang = this.angle||0;
+      for(let i=0;i<10;i++){
+        const spread = (Math.random()-.5)*0.7;
+        const dist = sz*1.1 + Math.random()*sz*1.4;
+        const fx = hw + Math.cos(ang+spread)*dist;
+        const fy = hy + Math.sin(ang+spread)*dist;
+        const fr = 2+Math.random()*4;
+        const alpha = 0.6-dist/(sz*3);
+        ctx.beginPath(); ctx.arc(fx,fy,fr,0,Math.PI*2);
+        ctx.fillStyle=`rgba(255,${(60+Math.random()*140)|0},0,${Math.max(0,alpha)})`;
+        ctx.shadowColor='#ff6600'; ctx.shadowBlur=GLOW_ON?12:0;
+        ctx.fill();
+      }
+    } else if(eid === '💀') {
+      // REAPER : crânes fantômes montants, tentacules violets
+      for(let i=0;i<5;i++){
+        const a = (i/5)*Math.PI*2 + t*0.8;
+        const r = sz + 4 + Math.sin(t*3+i*1.2)*sz*0.6;
+        const tx2 = hw + Math.cos(a)*r, ty2 = hy + Math.sin(a)*r;
+        ctx.beginPath();
+        ctx.moveTo(hw + Math.cos(a)*sz*0.9, hy + Math.sin(a)*sz*0.9);
+        ctx.bezierCurveTo(
+          hw+Math.cos(a+0.5)*r*0.6, hy+Math.sin(a+0.5)*r*0.6,
+          hw+Math.cos(a-0.5)*r*0.8, hy+Math.sin(a-0.5)*r*0.8,
+          tx2, ty2
+        );
+        ctx.strokeStyle=`rgba(191,0,255,${0.35+Math.sin(t*4+i)*0.25})`;
+        ctx.lineWidth=1.8; ctx.shadowColor='#bf00ff'; ctx.shadowBlur=GLOW_ON?14:0;
+        ctx.stroke();
+      }
+    } else if(eid === '🌑') {
+      // SHADOW : clones fantômes décalés, flou de vitesse sombre
+      for(let k=1;k<=3;k++){
+        const ghostX = hw - Math.cos(this.angle||0)*k*sz*0.7;
+        const ghostY = hy - Math.sin(this.angle||0)*k*sz*0.7;
+        ctx.beginPath(); ctx.arc(ghostX, ghostY, sz*(1-k*0.22), 0, Math.PI*2);
+        ctx.fillStyle=`rgba(20,20,80,${0.28-k*0.07})`;
+        ctx.shadowColor='#4444ff'; ctx.shadowBlur=GLOW_ON?18:0;
+        ctx.fill();
+      }
+      // Distorsion gravitationnelle pulsante
+      const rings = 3;
+      for(let r2=0;r2<rings;r2++){
+        const rr = sz*(1.5+r2*0.6) + Math.sin(t*3+r2)*4;
+        ctx.beginPath(); ctx.arc(hw,hy,rr,0,Math.PI*2);
+        ctx.strokeStyle=`rgba(50,50,200,${0.20-r2*0.05})`;
+        ctx.lineWidth=1; ctx.shadowBlur=0;
+        ctx.stroke();
+      }
+    } else if(eid === '⚡') {
+      // THUNDER : arcs électriques entre 6 points orbitaux
+      const pts = [];
+      for(let i=0;i<6;i++){
+        const a=(i/6)*Math.PI*2+t*1.5;
+        pts.push([hw+Math.cos(a)*(sz+10), hy+Math.sin(a)*(sz+10)]);
+      }
+      for(let i=0;i<pts.length;i++){
+        const next=pts[(i+1+Math.floor(t*4))%pts.length];
+        ctx.beginPath(); ctx.moveTo(pts[i][0],pts[i][1]);
+        const mx2=((pts[i][0]+next[0])/2)+(Math.random()-.5)*14;
+        const my2=((pts[i][1]+next[1])/2)+(Math.random()-.5)*14;
+        ctx.lineTo(mx2,my2); ctx.lineTo(next[0],next[1]);
+        ctx.strokeStyle=`rgba(255,255,${(100+Math.random()*155)|0},${0.6+Math.random()*0.4})`;
+        ctx.lineWidth=1.4; ctx.shadowColor='#ffff00'; ctx.shadowBlur=GLOW_ON?16:0;
+        ctx.stroke();
+      }
+    } else if(eid === '🧊') {
+      // BLIZZARD : éclats de glace cristallins rotatifs
+      for(let i=0;i<8;i++){
+        const a=(i/8)*Math.PI*2+t*0.6;
+        const ir=sz*1.1 + Math.sin(t*2+i)*6;
+        const ex=hw+Math.cos(a)*ir, ey=hy+Math.sin(a)*ir;
+        ctx.save(); ctx.translate(ex,ey); ctx.rotate(a+t*2);
+        ctx.beginPath();
+        ctx.moveTo(0,-5); ctx.lineTo(2,-1); ctx.lineTo(5,0);
+        ctx.lineTo(2,1);  ctx.lineTo(0,5); ctx.lineTo(-2,1);
+        ctx.lineTo(-5,0); ctx.lineTo(-2,-1); ctx.closePath();
+        ctx.fillStyle=`rgba(180,240,255,${0.55+Math.sin(t*3+i)*0.25})`;
+        ctx.shadowColor='#88ffff'; ctx.shadowBlur=GLOW_ON?10:0;
+        ctx.fill(); ctx.restore();
+      }
+      // Halo de givre concentrique
+      for(let r3=0;r3<2;r3++){
+        ctx.beginPath(); ctx.arc(hw,hy,sz*(1.4+r3*0.4)+Math.sin(t*2+r3)*3,0,Math.PI*2);
+        ctx.strokeStyle=`rgba(150,220,255,${0.20-r3*0.07})`;
+        ctx.lineWidth=1.2; ctx.shadowBlur=0; ctx.stroke();
+      }
+    } else if(eid === '☢️') {
+      // TOXIC : gouttes venimeuses et spirale radioactive
+      const spokeCount=3;
+      for(let s2=0;s2<spokeCount;s2++){
+        const baseA=(s2/spokeCount)*Math.PI*2+t*1.8;
+        for(let seg2=0;seg2<5;seg2++){
+          const progR=0.3+seg2*0.18;
+          const wobble=(seg2/5)*1.2;
+          const gx=hw+Math.cos(baseA+wobble)*(sz*progR);
+          const gy=hy+Math.sin(baseA+wobble)*(sz*progR);
+          const gr=2.5-seg2*0.3;
+          if(gr<=0) continue;
+          ctx.beginPath(); ctx.arc(gx,gy,gr,0,Math.PI*2);
+          ctx.fillStyle=`rgba(80,255,0,${0.55-seg2*0.09})`;
+          ctx.shadowColor='#39ff14'; ctx.shadowBlur=GLOW_ON?8:0;
+          ctx.fill();
+        }
+      }
+      // Cercle radioactif pulsant
+      ctx.beginPath(); ctx.arc(hw,hy,sz*1.3+Math.sin(t*5)*4,0,Math.PI*2);
+      ctx.strokeStyle=`rgba(100,255,0,${0.20+Math.sin(t*5)*0.12})`;
+      ctx.lineWidth=1.5; ctx.shadowBlur=0; ctx.stroke();
+    }
+    ctx.shadowBlur=0;
+    ctx.restore();
+    // ── FIN EFFETS SPÉCIAUX ──
+
     // ── 2. CORPS avec couleurs uniques ──
     for(let i=this.path.length-1;i>=0;i--) {
       const seg = this.path[i];
@@ -4270,8 +4457,7 @@ class Snake {
       const wy = seg.y - cam.y + canvas.height/2;
       if(wx<-60||wx>canvas.width+60||wy<-60||wy>canvas.height+60) continue;
       const prog = i/this.path.length;
-      const r = Math.max(sz*(0.80 + 0.20*(1-prog)), 8);
-      // Alternance des deux couleurs du boss
+      const r = Math.max(sz*(0.80 + 0.20*(1-prog)), 6);
       ctx.beginPath(); ctx.arc(wx,wy,r,0,Math.PI*2);
       ctx.fillStyle = i%2===0 ? c1 : c2;
       ctx.shadowColor = glow; ctx.shadowBlur = GLOW_ON ? 18 : 0;
@@ -4280,7 +4466,6 @@ class Snake {
     ctx.shadowBlur=0;
 
     // ── 3. TÊTE avec halo rotatif ──
-    // Halo rotatif
     if(GLOW_ON){
       ctx.save();
       ctx.translate(hw,hy);
@@ -4323,10 +4508,8 @@ class Snake {
     [1,-1].forEach(side=>{
       const ex = hw + fwdX + perpX*side;
       const ey = hy + fwdY + perpY*side;
-      // Blanc de l'œil
       ctx.beginPath(); ctx.arc(ex,ey,eyeR,0,Math.PI*2);
       ctx.fillStyle='#fff'; ctx.fill();
-      // Pupille rouge
       ctx.beginPath(); ctx.arc(ex+fwdX*0.3,ey+fwdY*0.3,eyeR*0.55,0,Math.PI*2);
       ctx.fillStyle=glow;
       ctx.shadowColor=glow; ctx.shadowBlur= GLOW_ON ? 8 : 0;
@@ -4337,13 +4520,11 @@ class Snake {
     const hpW   = sz*4.5;
     const hpPct = Math.max(0, Math.min(1, this.length/250));
     const barY  = hy - sz - 22;
-    // Fond
     ctx.fillStyle='rgba(0,0,0,0.7)';
     ctx.beginPath();
     ctx.roundRect ? ctx.roundRect(hw-hpW/2, barY, hpW, 9, 4)
                   : ctx.fillRect(hw-hpW/2, barY, hpW, 9);
     ctx.fill();
-    // Barre colorée
     const hpColor = hpPct > 0.5 ? `hsl(${hpPct*120},100%,50%)` : `hsl(${hpPct*60},100%,50%)`;
     ctx.fillStyle = hpColor;
     ctx.shadowColor=hpColor; ctx.shadowBlur= GLOW_ON ? 6 : 0;
@@ -4351,7 +4532,6 @@ class Snake {
     ctx.roundRect ? ctx.roundRect(hw-hpW/2, barY, hpW*hpPct, 9, 4)
                   : ctx.fillRect(hw-hpW/2, barY, hpW*hpPct, 9);
     ctx.fill(); ctx.shadowBlur=0;
-    // Bordure barre
     ctx.strokeStyle=`rgba(${aura},0.5)`; ctx.lineWidth=1;
     ctx.beginPath();
     ctx.roundRect ? ctx.roundRect(hw-hpW/2, barY, hpW, 9, 4)
@@ -4362,10 +4542,8 @@ class Snake {
     const nameY = barY - 6;
     ctx.font = `bold ${Math.round(sz*0.85)}px Orbitron,monospace`;
     ctx.textAlign='center';
-    // Ombre portée
     ctx.fillStyle='rgba(0,0,0,0.8)';
     ctx.fillText(this.name || (crown+' BOSS'), hw+1, nameY+1);
-    // Texte principal
     ctx.fillStyle='#ffffff';
     ctx.shadowColor=glow; ctx.shadowBlur= GLOW_ON ? 12 : 0;
     ctx.fillText(this.name || (crown+' BOSS'), hw, nameY);
@@ -4678,8 +4856,6 @@ function resetAllGameState() {
   brZoneCY        = WORLD / 2;
   brPrevZoneCX    = WORLD / 2;
   brPrevZoneCY    = WORLD / 2;
-  brPlayerRank    = 0;
-  brEliminationOrder = [];
 
   // Réseau
   stopPositionSync();
@@ -4943,7 +5119,7 @@ document.addEventListener('keydown', e => {
     case 'KeyE':               e.preventDefault(); useSkill(2); break;
     case 'Space': e.preventDefault(); if(gameState.player) gameState.player.boosting = true; break;
     case 'Escape': e.preventDefault(); quitGame(); break;
-    case 'KeyM': { const mm = document.getElementById('minimap'); if(mm) mm.style.display = mm.style.display==='none'?'':'none'; break; }
+    case 'KeyM': const mm = document.getElementById('minimap'); if(mm) mm.style.display = mm.style.display==='none'?'':'none'; break;
   }
 });
 document.addEventListener('keyup', e => {
@@ -5169,6 +5345,18 @@ function gameLoop(timestamp = 0) {
     }
   }
 
+  // ── FIX 1 : GHOST ZONE — loop indépendant bots + boss (indépendant de la position joueur) ──
+  if(gs.frame % 3 === 0) {
+    ZONES.forEach(z => {
+      if(z.effect !== 'ghost') return;
+      gs.snakes.forEach(s => {
+        if(!s.alive || s.isPlayer) return;
+        const sdx = s.head.x - z.x, sdy = s.head.y - z.y;
+        if(sdx*sdx + sdy*sdy < z.r*z.r) s.wallGhostTimer = Math.max(s.wallGhostTimer||0, 5);
+      });
+    });
+  }
+
   // ── BOSS SPAWN : apparition aléatoire n'importe où sur la map ──
   gs.bossSpawnTimer--;
   if(gs.bossSpawnTimer <= 0 && !bossAlive) {
@@ -5214,10 +5402,11 @@ function gameLoop(timestamp = 0) {
     boss.bossAura     = bt.aura;
     boss.bossGlow     = bt.glowColor;
     boss.bossCrown    = bt.crownEmoji;
-    boss.bossSizeMult = bt.size || 1.3;
+    boss.bossSizeMult = bt.size || 1.0;
+    boss.bossEffectId = bt.crownEmoji; // FIX 3 : identifiant pour effets spéciaux drawBoss
     boss.ai_behavior = bt.behavior;
     boss._aggressionLevel = 1.0;
-    boss.size = 18 * (bt.size || 1.3);
+    boss.size = 13 * (bt.size || 1.0); // FIX 3 : taille réduite (était 18)
     gs.snakes.push(boss);
     bossAlive = true;
     showBossAnnounce(bt);
@@ -5259,7 +5448,18 @@ function gameLoop(timestamp = 0) {
     s.update(gs, dt);
   });
   // Food update supprimé (pulse via Date.now — 0 calcul par frame)
-  // Vent météo : géré uniquement dans updateWeather() — pas de double application ici
+  // Vent météo : seulement si actif
+  if(currentWeather && (currentWeather.windX || currentWeather.windY)) {
+    const px = gs.player ? gs.player.head.x : WORLD/2;
+    const py = gs.player ? gs.player.head.y : WORLD/2;
+    gs.foods.forEach(f => {
+      const fdx = Math.abs(f.pos.x - px), fdy = Math.abs(f.pos.y - py);
+      if(fdx < 800 && fdy < 800) {
+        f.pos.x += currentWeather.windX * 0.3;
+        f.pos.y += currentWeather.windY * 0.3;
+      }
+    });
+  }
   gs.powerups.forEach(p => p.update(dt));
   updateParticles();
 
@@ -5313,7 +5513,7 @@ function gameLoop(timestamp = 0) {
             const coinEarned = Math.ceil(f.value * 0.04 * coinMult);
             gs.coins += coinEarned;
             if(coinEarned > 0 && Math.random() < 0.3) sfxCoin?.();
-            addCollectFlash(s.head.x, s.head.y, `hsl(${f.hue},100%,65%)`);
+            addCollectFlash(s.head.x, s.head.y, f.color || '#ffd700');
           }
           _toRemoveGlobal.add(i);
         }
@@ -5436,6 +5636,8 @@ function gameLoop(timestamp = 0) {
         if(gs.player && (gs.player.wallGhostTimer > 0 || hasStat('wallGhost'))) {
           if(sA.isPlayer || sB.isPlayer) continue;
         }
+        // ── FIX 2 : FANTÔME — immunité ghost pour bots/boss aussi ──
+        if(sA.wallGhostTimer > 0 || sB.wallGhostTimer > 0) continue;
         // Boss gagne TOUJOURS contre un bot (même si plus petit)
         let aWins;
         if(sA.isBoss && !sB.isBoss) aWins = true;
@@ -6367,7 +6569,7 @@ function showAdThenDo(callback){
   const el = document.getElementById('adStatScore');
   const ek = document.getElementById('adStatKills');
   const ec = document.getElementById('adStatCoins');
-  if(el) el.textContent = (sd.lastScore||0) > 0 ? (sd.lastScore||0).toLocaleString() : '—';
+  if(el) el.textContent = sd.bestScore > 0 ? sd.bestScore.toLocaleString() : '—';
   if(ek) ek.textContent = sd.totalKills > 0 ? sd.totalKills : '—';
   if(ec) ec.textContent = sd.coins > 0 ? sd.coins.toLocaleString() : '—';
 
@@ -6478,6 +6680,8 @@ function initAnalytics(hasConsent){
   s.async=true;s.src='https://www.googletagmanager.com/gtag/js?id=G-9Q04XKXKD2';
   document.head.appendChild(s);
   // Utilise le gtag déjà défini dans <head> (Consent Mode v2) — ne pas redéfinir
+  window.dataLayer=window.dataLayer||[];
+  if(typeof window.gtag!=='function') window.gtag=function(){dataLayer.push(arguments);};
   window.gtag('js',new Date());
   window.gtag('config','G-9Q04XKXKD2',{anonymize_ip:true});
 }
@@ -6544,31 +6748,14 @@ window.addEventListener('DOMContentLoaded',()=>{
 if('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     const swCode = `
-const CACHE = 'snakewars-v2';
-const PRECACHE = ['/', '/index.html', '/manifest.json', '/favicon.png'];
-self.addEventListener('install', e => {
-  self.skipWaiting();
-  e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(PRECACHE).catch(()=>{}))
-  );
-});
+const CACHE = 'snakewars-v1';
+self.addEventListener('install', e => { self.skipWaiting(); });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));
   self.clients.claim();
 });
 self.addEventListener('fetch', e => {
-  if(e.request.method !== 'GET') return;
-  e.respondWith(
-    fetch(e.request)
-      .then(res => {
-        if(res && res.status === 200 && res.type === 'basic') {
-          const clone = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
-        }
-        return res;
-      })
-      .catch(() => caches.match(e.request))
-  );
+  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
 });
 `;
     const blob = new Blob([swCode], {type:'text/javascript'});

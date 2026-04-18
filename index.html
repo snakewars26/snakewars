@@ -3,7 +3,14 @@
 <head>
 <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'unsafe-inline' https://cdn.ably.com https://www.googletagmanager.com https://pagead2.googlesyndication.com https://www.google-analytics.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.ably.io wss://*.ably.io https://ipapi.co https://pagead2.googlesyndication.com https://www.google-analytics.com; frame-src https://googleads.g.doubleclick.net https://tpc.googlesyndication.com; object-src 'none';">
-<link rel="manifest" href="manifest.json">
+<script>
+(function(){
+  const m={"name":"SnakeWars.io \u2014 Battle Royale","short_name":"SnakeWars","description":"Jeu de serpent Battle Royale multijoueur. 100 joueurs, sans inscription, 100% gratuit.","start_url":"./index.html","display":"standalone","orientation":"portrait","background_color":"#050810","theme_color":"#00f5ff","lang":"fr","scope":"./","categories":["games","entertainment"],"icons":[{"src":"icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},{"src":"icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}],"screenshots":[{"src":"preview.png","sizes":"1200x630","type":"image/png","label":"SnakeWars Battle Royale"}],"shortcuts":[{"name":"Jouer maintenant","short_name":"Jouer","description":"Lancer une partie Battle Royale","url":"./index.html","icons":[{"src":"icon-192.png","sizes":"192x192"}]}]};
+  const b=new Blob([JSON.stringify(m)],{type:'application/manifest+json'});
+  const l=document.createElement('link');l.rel='manifest';l.href=URL.createObjectURL(b);
+  document.currentScript.parentNode.insertBefore(l,document.currentScript);
+})();
+</script>
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <meta name="theme-color" content="#050810">
 <!-- Manifest inline — PWA sans fichier externe -->
@@ -20,10 +27,10 @@
 
 <!-- ═══ Plateformes supportées ═══ -->
 <!-- Navigateurs compatibles : Chrome, Firefox, Safari, Edge (Android, iOS, Windows, Mac) -->
-<!-- Contrôles : Souris (PC) · Joystick tactile (Mobile) · Clavier AZERTY/QWERTY (PC) -->
+<!-- Contrôles : Souris/tactile glissé (PC/Mobile) · Clavier AZERTY/QWERTY (PC) -->
 
 <title>SnakeWars.io — Jeu de Serpent Battle Royale Multijoueur Gratuit</title>
-<meta name="description" content="Jouez a SnakeWars.io, le jeu de serpent Battle Royale multijoueur en ligne ! Affrontez des joueurs du monde entier, debloquez des skins, grimpez dans les classements. 100% gratuit sur navigateur.">
+<meta name="description" content="Jouez à SnakeWars.io, le jeu de serpent Battle Royale multijoueur en ligne ! Affrontez des joueurs du monde entier, débloquez des skins, grimpez dans les classements. 100% gratuit sur navigateur.">
 <meta name="keywords" content="snake wars, jeu serpent multijoueur, snake battle royale, snakewars io, jeu serpent gratuit, snake io">
 <meta name="author" content="Herve Caporale - hervecaporale17@gmail.com">
 <meta name="robots" content="index, follow">
@@ -98,8 +105,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
 @keyframes lp{0%,100%{filter:drop-shadow(0 0 18px rgba(0,245,255,.5))}50%{filter:drop-shadow(0 0 32px rgba(57,255,20,.7))}}
 .logo-sub{font-family:'Orbitron',monospace;font-size:.5rem;letter-spacing:.32em;color:#ffd700;margin-bottom:.5rem}
 
-/* Stats */
-
 /* Section labels */
 .slbl{font-family:'Orbitron',monospace;font-size:.4rem;color:rgba(255,255,255,.22);letter-spacing:.26em;text-align:center;width:100%;margin-top:.2rem}
 
@@ -112,7 +117,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
   border-radius:11px;cursor:pointer;letter-spacing:.04em;text-align:center;line-height:1.5;
   transition:transform .1s,box-shadow .18s;border:none}
 .mb:active{transform:scale(.95)}
-.mb-battle{background:linear-gradient(135deg,rgba(255,0,110,.25),rgba(136,0,34,.3));border:1px solid #ff006e;color:#ff6699}
+
 .mb-skins{background:linear-gradient(135deg,rgba(0,245,255,.1),rgba(191,0,255,.08));border:1px solid rgba(0,245,255,.35);color:#00f5ff}
 .mb-acc{background:linear-gradient(135deg,rgba(255,215,0,.1),rgba(255,136,0,.07));border:1px solid rgba(255,215,0,.32);color:#ffd700}
 .mb-build{background:linear-gradient(135deg,rgba(57,255,20,.1),rgba(0,255,136,.07));border:1px solid rgba(57,255,20,.32);color:#39ff14}
@@ -148,13 +153,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
 .skill-btn .sk-cd{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-size:.6rem;font-weight:900;color:#fff;background:rgba(0,0,0,.6);border-radius:10px;display:none;}
 .skill-btn.on-cd .sk-cd{display:flex;}
 .skill-btn.on-cd .sk-icon{opacity:.3;}
-.mb-stats{background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.22);color:#00e5ff}
-.mb-daily{background:rgba(255,136,0,.07);border:1px solid rgba(255,136,0,.3);color:#ff8800}
-.mb-ad{width:100%;font-family:'Orbitron',monospace;font-size:.62rem;font-weight:700;padding:.62rem;
-  border-radius:10px;cursor:pointer;background:rgba(255,215,0,.06);border:1px solid rgba(255,215,0,.24);color:#ffd700;letter-spacing:.05em}
-.mb-vip{width:100%;font-family:'Orbitron',monospace;font-size:.65rem;font-weight:700;padding:.6rem;
-  border-radius:10px;cursor:pointer;border:1px solid rgba(255,215,0,.38);
-  background:linear-gradient(135deg,rgba(255,215,0,.12),rgba(255,136,0,.07));color:#ffd700;letter-spacing:.07em}
 
 /* Info links */
 .info-links{width:100%;display:flex;flex-wrap:wrap;justify-content:center;gap:.35rem;padding:.6rem 1rem;position:relative;z-index:20;background:rgba(5,8,20,.8);border-top:1px solid rgba(255,255,255,.07);}
@@ -185,26 +183,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
 }
 .play-main-btn:active{transform:scale(.96);box-shadow:0 0 45px rgba(57,255,20,.7)}
 
-/* ── PSEUDO SCREEN ── */
-#pseudoScreen{background:radial-gradient(ellipse at 50% 35%,#0d1f3c,#050810);
-  justify-content:center;align-items:center;gap:1rem;padding:2rem}
-.pseudo-box{width:min(340px,90vw);display:flex;flex-direction:column;align-items:center;gap:1rem}
-.pseudo-title{font-family:'Orbitron',monospace;font-size:1.1rem;font-weight:900;color:#00f5ff;text-align:center}
-.pseudo-sub{font-size:.65rem;color:rgba(255,255,255,.38);text-align:center;letter-spacing:.05em}
-.pseudo-input{width:100%;padding:.8rem 1rem;background:rgba(0,245,255,.06);
-  border:2px solid rgba(0,245,255,.3);border-radius:12px;font-family:'Orbitron',monospace;
-  font-size:.85rem;color:#fff;outline:none;text-align:center;letter-spacing:.08em;
-  transition:border-color .2s}
-.pseudo-input:focus{border-color:#00f5ff;box-shadow:0 0 20px rgba(0,245,255,.2)}
-.pseudo-input::placeholder{color:rgba(255,255,255,.25);font-size:.7rem;letter-spacing:.05em}
-.pseudo-play-btn{width:100%;font-family:'Orbitron',monospace;font-size:.75rem;font-weight:900;
-  padding:.8rem;border-radius:12px;cursor:pointer;border:none;letter-spacing:.08em;
-  background:linear-gradient(135deg,#39ff14,#00aa00);color:#000;
-  box-shadow:0 0 24px rgba(57,255,20,.35);transition:transform .1s,box-shadow .2s}
-.pseudo-play-btn:active{transform:scale(.96)}
-.pseudo-back{background:none;border:1px solid rgba(255,255,255,.14);border-radius:8px;
-  padding:.45rem 1.2rem;font-family:'Orbitron',monospace;font-size:.52rem;
-  color:rgba(255,255,255,.38);cursor:pointer}
 
 /* ── GAME ── */
 #gameScreen{background:#000;z-index:20;position:fixed;inset:0}
@@ -219,14 +197,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
 .hv{font-family:'Orbitron',monospace;font-size:clamp(.68rem,2.5vw,1rem);font-weight:700;color:#fff}
 .hl{font-size:clamp(.36rem,1.3vw,.46rem);color:rgba(255,255,255,.32);letter-spacing:.07em}
 .gold{color:#ffd700}
-.energy-bar{width:100%;height:3px;background:rgba(255,255,255,.1);border-radius:2px;margin-top:3px;overflow:hidden}
 .energy-fill{height:100%;background:linear-gradient(90deg,#39ff14,#00aa00);border-radius:2px;transition:width .1s}
 .quit-btn{font-family:'Orbitron',monospace;font-size:.43rem;padding:.28rem .5rem;border-radius:6px;
   cursor:pointer;pointer-events:all;border:1px solid rgba(255,80,80,.28);background:rgba(255,50,50,.07);color:rgba(255,100,100,.65)}
-#boostHint{position:absolute;bottom:clamp(70px,14vw,95px);left:50%;transform:translateX(-50%);
-  font-family:'Orbitron',monospace;font-size:.43rem;color:rgba(57,255,20,.45);
-  background:rgba(5,8,20,.68);border:1px solid rgba(57,255,20,.16);border-radius:14px;
-  padding:.22rem .65rem;pointer-events:none;z-index:35}
 #notif{position:absolute;top:clamp(46px,9vw,64px);left:50%;transform:translateX(-50%);
   z-index:50;pointer-events:none;white-space:nowrap;font-family:'Orbitron',monospace;
   font-size:clamp(.48rem,1.9vw,.68rem);background:rgba(5,8,20,.92);
@@ -234,10 +207,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
   color:#00f5ff;opacity:0;transition:opacity .3s}
 #killFeed{position:absolute;top:clamp(46px,9vw,64px);right:clamp(5px,1.8vw,10px);
   display:flex;flex-direction:column;gap:3px;z-index:35;pointer-events:none;max-width:185px}
-.kfe{background:rgba(5,8,20,.82);border-left:2px solid #ff006e;border-radius:4px;
-  padding:2px 7px;font-family:'Rajdhani',sans-serif;font-size:clamp(.46rem,1.7vw,.6rem);
-  color:rgba(255,255,255,.68);animation:kfIn .25s ease}
-.kill-msg{background:rgba(5,8,20,.82);border-left:2px solid #ff006e;border-radius:4px;
+.kfe,.kill-msg{background:rgba(5,8,20,.82);border-left:2px solid #ff006e;border-radius:4px;
   padding:2px 7px;font-family:'Rajdhani',sans-serif;font-size:clamp(.46rem,1.7vw,.6rem);
   color:rgba(255,255,255,.68);animation:kfIn .25s ease}
 @keyframes kfIn{from{opacity:0;transform:translateX(15px)}to{opacity:1;transform:translateX(0)}}
@@ -360,9 +330,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
 
 /* ── AD REWARD NOTIF ── */
 #adRewardNotif{transition:opacity .4s ease}
-/* Joystick flottant */
-#joystickBase{ display:none !important; }
-#joystickThumb{ display:none !important; }
+
 
 /* Barre de contrôles mobile */
 .controls-area{
@@ -500,7 +468,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
         data-ad-slot="5101438658"
         data-ad-format="auto"
         data-full-width-responsive="true"></ins>
-      <script>(adsbygoogle=window.adsbygoogle||[]).push({});</script>
+      <!-- push() appelé via initAds() après consentement RGPD uniquement -->
     </div>
 
     <!-- Gameplay -->
@@ -517,7 +485,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
       data-ad-format="fluid"
       data-ad-client="ca-pub-5433648295830648"
       data-ad-slot="5101438658"></ins>
-    <script>(adsbygoogle=window.adsbygoogle||[]).push({});</script>
+    <!-- push() appelé via initAds() après consentement RGPD uniquement -->
 
     <!-- Les 6 zones -->
     <div class="seo-blk" style="background:rgba(255,0,110,.04);border:1px solid rgba(255,0,110,.12);">
@@ -567,7 +535,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
       <h2 style="color:#00d4ff;">❓ Questions Fréquentes</h2>
       <p><strong style="color:#fff;">SnakeWars.io est-il gratuit ?</strong><br>Oui, 100% gratuit sur navigateur. Les coins s'obtiennent en regardant des publicités. Aucun achat obligatoire.</p>
       <p style="margin-top:.55rem;"><strong style="color:#fff;">Mes coins et skins sont-ils sauvegardés ?</strong><br>Sauvegardés dans le <strong>localStorage</strong> de ton navigateur. Vider le cache ou changer d'appareil les efface. Évite le mode navigation privée.</p>
-      <p style="margin-top:.55rem;"><strong style="color:#fff;">Peut-on jouer sur mobile ?</strong><br>Oui ! Joystick tactile, boutons skills et boost intégrés. Installe-le comme <strong>app PWA</strong> pour une expérience plein écran.</p>
+      <p style="margin-top:.55rem;"><strong style="color:#fff;">Peut-on jouer sur mobile ?</strong><br>Oui ! Glisse sur l'écran pour diriger, boutons Skills et Boost intégrés. Installe-le comme <strong>app PWA</strong> pour une expérience plein écran.</p>
       <p style="margin-top:.55rem;"><strong style="color:#fff;">Combien de temps dure une partie ?</strong><br>Entre 2 et 5 minutes selon ta survie. La zone rétrécit rapidement, ce qui force les confrontations et accélère la fin de partie.</p>
     </div>
 
@@ -645,10 +613,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
     </div>
     <div style="font-family:'Orbitron',monospace;font-size:.35rem;color:rgba(255,255,255,.35);letter-spacing:.1em;">⚔️ <span id="brChronoAlive">0</span> VIVANTS</div>
   </div>
-  <!-- Joystick flottant SERPEX — apparaît là où tu touches -->
-  <div id="joystickBase">
-    <div id="joystickThumb"></div>
-  </div>
+
 
   <!-- Barre de contrôles mobile — skills + boost alignés -->
   <div class="controls-area" id="controlsArea">
@@ -804,7 +769,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
       </p>
       <h3>CONTRÔLES MOBILE (Tactile)</h3>
       <p>
-        👆 <strong>Glisse sur l'écran</strong> — le joystick flottant apparaît où tu touches, glisse pour diriger<br>
+        👆 <strong>Glisse sur l'écran</strong> — glisse ton doigt pour diriger ton serpent<br>
         ⚡ <strong>Bouton BOOST</strong> (bas à gauche) — maintiens pour accélérer<br>
         🛡️ <strong>Boutons Skills</strong> (bas, au centre) — appuie pour activer tes skills équipés
       </p>
@@ -899,19 +864,19 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
     <div class="leg-t">📜 CONDITIONS GÉNÉRALES</div>
     <div class="leg-b">
       <h3>1. Objet</h3>
-      <p>Les presentes conditions generales d'utilisation regissent l'acces et l'utilisation du jeu SnakeWars.io. En accedant au jeu, vous acceptez ces conditions.</p>
-      <h3>2. Acces au jeu</h3>
-      <p>SnakeWars.io est un jeu gratuit accessible sans inscription. Les coins virtuels sont obtenus gratuitement en jeu ou via des publicites.</p>
-      <h3>3. Regles de conduite</h3>
-      <p>Les joueurs s'engagent a ne pas utiliser de pseudo offensant ou contraire a la loi. L'editeur se reserve le droit de bannir tout joueur ne respectant pas ces regles.</p>
-      <h3>4. Propriete intellectuelle</h3>
-      <p>Le jeu SnakeWars.io, son code, ses graphismes et son contenu sont la propriete exclusive de leur auteur. Toute reproduction est interdite sans autorisation.</p>
-      <h3>5. Responsabilite</h3>
-      <p>SnakeWars.io est propose sans garantie de disponibilite. L'editeur ne peut etre tenu responsable d'une interruption de service.</p>
+      <p>Les présentes conditions générales d'utilisation régissent l'accès et l'utilisation du jeu SnakeWars.io. En accédant au jeu, vous acceptez ces conditions.</p>
+      <h3>2. Accès au jeu</h3>
+      <p>SnakeWars.io est un jeu gratuit accessible sans inscription. Les coins virtuels sont obtenus gratuitement en jeu ou via des publicités.</p>
+      <h3>3. Règles de conduite</h3>
+      <p>Les joueurs s'engagent à ne pas utiliser de pseudo offensant ou contraire à la loi. L'éditeur se réserve le droit de bannir tout joueur ne respectant pas ces règles.</p>
+      <h3>4. Propriété intellectuelle</h3>
+      <p>Le jeu SnakeWars.io, son code, ses graphismes et son contenu sont la propriété exclusive de leur auteur. Toute reproduction est interdite sans autorisation.</p>
+      <h3>5. Responsabilité</h3>
+      <p>SnakeWars.io est proposé sans garantie de disponibilité. L'éditeur ne peut être tenu responsable d'une interruption de service.</p>
       <h3>6. Monnaie virtuelle</h3>
-      <p>Les coins sont une monnaie virtuelle sans valeur reelle, non echangeable contre de l'argent reel.</p>
+      <p>Les coins sont une monnaie virtuelle sans valeur réelle, non échangeable contre de l'argent réel.</p>
       <h3>7. Droit applicable</h3>
-      <p>Ces conditions sont soumises au droit francais.</p>
+      <p>Ces conditions sont soumises au droit français.</p>
       <p style="margin-top:1rem;color:rgba(255,255,255,.5);font-size:.62rem;">Contact : <a href="mailto:hervecaporale17@gmail.com" style="color:#00d4ff;">hervecaporale17@gmail.com</a></p>
     </div>
   </div>
@@ -980,7 +945,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
   </div>
 </div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script>
 'use strict';
 
 // ── Échappement HTML — protège tous les innerHTML avec données réseau
@@ -1063,13 +1028,13 @@ const ACCESSORIES = [
 // ═══════════════════════════════════════════════
 // PERSISTENT DATA
 // coins = solde permanent
-// equippedSkin / equippedAcc = sélection en attente
-// pendingSkin / pendingAcc = acheté pour la manche en cours
+// equippedSkin / equippedAcc = sélection active
 // ═══════════════════════════════════════════════
 const SKILL_COST = { ghost:300, overload:400, teleport:350, virus:450 };
 
 let sd = {
   kills: 0, bestLen: 0, coins: 0,
+  bestScore: 0, totalKills: 0,
   equippedSkin: 0,
   equippedAcc: [],
   equippedSkills: ['shield','magnet','turbo'], // build actif (3 slots)
@@ -1225,7 +1190,6 @@ const rnd  = (a,b)=>a+Math.random()*(b-a);
 const rndI = (a,b)=>Math.floor(rnd(a,b+1));
 const clp  = (v,lo,hi)=>Math.max(lo,Math.min(hi,v));
 
-let _nT=null;
 function closeOverlay(id){showScreen('menuScreen');refreshMenu();}
 
 // ═══════════════════════════════════════════════
@@ -1534,9 +1498,7 @@ let musicGain   = null;
 let sfxGain     = null;
 let shakeIntensity = 0;
 
-// Stubs des fonctions SERPEX non utilisées dans SnakeWars
-// NOTE: resetAllGameState, initAudio, startMusic, stopMusic sont définies plus bas
-// avec leur vraie implémentation — ne pas les stubber ici !
+// Stubs moteur — appelés par startGame/stopGame, implémentation vide intentionnelle
 function startPeriodicSave(){}
 function stopPeriodicSave(){}
 
@@ -1562,14 +1524,8 @@ function handleRealPlayerKill(userId, name) {
   addKillMsg(`💀 Tu as éliminé ${name||'un adversaire'} !`);
 }
 
-// Saisons (stubs — pas de système de saison actif dans cette version)
-const SEASONS = [{ num:1, name:'Saison 1', emoji:'⚔️', color:'#00f5ff' }];
-function getCurrentSeason() { return SEASONS[0]; }
-function updateSeasonUI() {}
-function renderBPTrack() {}
-// saveNow : alias de saveSD (utilisé dans le système BR et saisons)
+// saveNow : alias de saveSD (utilisé dans le système BR)
 function saveNow(sync){ saveSD(); return Promise.resolve(); }
-// ═══════════════════════════════════════════════════════
 //  MULTIJOUEUR TEMPS RÉEL — ABLY
 // ═══════════════════════════════════════════════════════
 
@@ -1733,7 +1689,6 @@ function stopPositionSync() {
 }
 
 function stopMultiplayerChat(){}
-function cleanupLobby(){}
 
 // ── Interpoler et nettoyer les joueurs distants ──
 function interpolateRemotePlayers() {
@@ -1794,21 +1749,11 @@ function interpolateRemotePlayers() {
   }
 }
 function updateMenu(){ refreshMenu(); }
-function scheduleSave(){}
-function saveSD_async(){ saveSD(); }
-function supaFetch(){ return Promise.resolve({}); }
-function calcXPGained(){ return 0; }
-function calcSeasonXPGained(){ return 0; }
-function getLevelFromXP(){ return { level:1, currentXP:0, xpNeeded:100 }; }
-function getSeasonLevelFromXP(){ return { level:1, currentXP:0, xpNeeded:100 }; }
-function getSeasonDaysLeft(){ return 0; }
 function getSkin(id) {
   return SKINS.find(s => s.id === id) || SKINS[0];
 }
 function hasStat(){ return false; }
 function getVipCoinMult(){ return 1; }
-function doLogin(){}
-function doRegister(){}
 function getEquippedAccessories(){ return sd.equippedAcc || []; }
 
 // ══ Rendu des accessoires sur le canvas (système SERPEX complet) ══
@@ -1831,9 +1776,7 @@ function drawAccessories(ctx, snake, cam) {
   const ang = snake.angle;              // direction de déplacement
   const t   = Date.now() / 1000;
 
-  // upX/upY sont utilisés pour les autres accessoires (aura, scarf...)
-  const fwdX =  Math.cos(ang), fwdY =  Math.sin(ang);
-  const upX  =  Math.sin(ang), upY  = -Math.cos(ang);
+  const upX  =  Math.sin(ang), upY  = -Math.cos(ang); // vecteur perpendiculaire (écharpe)
 
   equipped.forEach(id => {
     const acc = ACCESSORIES.find(a => a.id === id);
@@ -1871,29 +1814,6 @@ function drawAccessories(ctx, snake, cam) {
       c.shadowBlur = 0;
       c.shadowColor = 'transparent';
       c.fillText(acc.emoji, 0, -sz * 1.7);
-
-    // ────────────────────────────────────────────────────────
-    // AURA — halo pulsant autour de la tête
-    // ────────────────────────────────────────────────────────
-    } else if (acc.type === 'aura') {
-      const pulse = 1 + Math.sin(t * 3) * 0.18;
-      const r = Math.max(sz * 2.6, 20) * pulse;
-      const col = acc.color === 'multi' ? `hsl(${(t * 120) % 360},100%,60%)` : acc.color;
-      // Halo externe dégradé
-      const grad = c.createRadialGradient(hx, hy, sz * 0.5, hx, hy, r);
-      grad.addColorStop(0,   col + 'aa');
-      grad.addColorStop(0.5, col + '55');
-      grad.addColorStop(1,   col + '00');
-      c.beginPath(); c.arc(hx, hy, r, 0, Math.PI * 2);
-      c.fillStyle = grad; c.fill();
-      // Anneau lumineux sur le contour de la tête
-      c.beginPath(); c.arc(hx, hy, sz * 1.15 * pulse, 0, Math.PI * 2);
-      c.strokeStyle = col;
-      c.lineWidth = Math.max(sz * 0.25, 2);
-      c.shadowColor = col; c.shadowBlur = Math.max(sz * 1.5, 10);
-      c.globalAlpha = 0.7 + Math.sin(t * 4) * 0.2;
-      c.stroke();
-      c.shadowBlur = 0; c.globalAlpha = 1;
 
     // ────────────────────────────────────────────────────────
     // ÉCHARPE — ruban coloré dans le cou du serpent
@@ -1990,25 +1910,6 @@ function drawAccessories(ctx, snake, cam) {
             c.fillText('❄️', wx, wy);
           }
 
-        } else if (acc.id === 'trail_smoke') {
-          c.globalAlpha = fade * 0.38;
-          const drift = Math.sin(t * 1.5 + i * 0.3) * 5 * prog;
-          const smokeR = Math.max(pSz * (0.35 + prog * 0.65), 4);
-          const sg = c.createRadialGradient(wx+drift, wy-prog*pSz*0.3, 0, wx+drift, wy, smokeR);
-          sg.addColorStop(0,   'rgba(210,210,210,0.4)');
-          sg.addColorStop(0.5, 'rgba(160,160,160,0.2)');
-          sg.addColorStop(1,   'rgba(100,100,100,0)');
-          c.fillStyle = sg;
-          c.beginPath(); c.arc(wx+drift, wy-prog*pSz*0.2, smokeR, 0, Math.PI*2); c.fill();
-
-        } else if (acc.id === 'trail_neon') {
-          c.globalAlpha = fade * 0.92;
-          const nR = Math.max(pSz * 0.38, 2.5);
-          c.fillStyle = '#00f5ff';
-          c.shadowColor = '#00f5ff'; c.shadowBlur = 14;
-          c.beginPath(); c.arc(wx, wy, nR, 0, Math.PI*2); c.fill();
-          c.shadowBlur = 0;
-
         } else if (acc.id === 'trail_rainbow') {
           c.globalAlpha = fade * 0.92;
           const rR  = Math.max(pSz * 0.38, 2.5);
@@ -2017,31 +1918,6 @@ function drawAccessories(ctx, snake, cam) {
           c.shadowColor = col; c.shadowBlur = 8;
           c.beginPath(); c.arc(wx, wy, rR, 0, Math.PI*2); c.fill();
           c.shadowBlur = 0;
-
-        } else if (acc.id === 'trail_void') {
-          c.globalAlpha = fade * 0.85;
-          const vR  = Math.max(pSz * 0.42, 3);
-          const vg  = c.createRadialGradient(wx, wy, 0, wx, wy, vR);
-          vg.addColorStop(0,   'rgba(80,0,120,0.95)');
-          vg.addColorStop(0.5, 'rgba(30,0,60,0.7)');
-          vg.addColorStop(1,   'rgba(0,0,0,0)');
-          c.fillStyle = vg;
-          c.shadowColor = '#6600cc'; c.shadowBlur = 12;
-          c.beginPath(); c.arc(wx, wy, vR, 0, Math.PI*2); c.fill();
-          c.shadowBlur = 0;
-
-        } else if (acc.id === 'trail_galaxy') {
-          c.globalAlpha = fade * 0.88;
-          const gR  = Math.max(pSz * 0.4, 3);
-          const col = `hsl(${(t * 60 + i * 22) % 360},90%,65%)`;
-          c.fillStyle = col;
-          c.shadowColor = col; c.shadowBlur = 10;
-          c.beginPath(); c.arc(wx, wy, gR, 0, Math.PI*2); c.fill();
-          c.shadowBlur = 0;
-          if (i % (step * 3) === 0) {
-            c.globalAlpha = fade * 0.6;
-            c.fillText('✨', wx, wy);
-          }
 
         } else {
           // trail_stars, trail_hearts et tout autre emoji trail
@@ -2053,26 +1929,6 @@ function drawAccessories(ctx, snake, cam) {
         }
       }
 
-    // ────────────────────────────────────────────────────────
-    // EXTRA — 3 icônes en orbite autour de la tête
-    // ────────────────────────────────────────────────────────
-    } else if (acc.type === 'extra') {
-      const orbitR  = Math.max(sz * 2.8, 24);
-      const extraSz = Math.max(sz * 1.6, 12);
-      c.font = `${extraSz}px serif`;
-      c.textAlign = 'center';
-      c.textBaseline = 'middle';
-      for (let k = 0; k < 3; k++) {
-        const oAng = t * 2.2 + k * (Math.PI * 2 / 3);
-        const ex = hx + Math.cos(oAng) * orbitR;
-        const ey = hy + Math.sin(oAng) * orbitR;
-        const bob = Math.sin(t * 3 + k * 2) * sz * 0.15;
-        c.globalAlpha = 0.92;
-        c.shadowColor = acc.color && acc.color !== 'multi' ? acc.color : `hsl(${(t*60+k*120)%360},100%,65%)`;
-        c.shadowBlur  = Math.max(sz * 0.8, 6);
-        c.fillText(acc.emoji, ex, ey + bob);
-        c.shadowBlur = 0;
-      }
     }
 
     c.restore();
@@ -2250,7 +2106,6 @@ function quitGame(){
   }
   showScreen('deathScreen');
 }
-// initInput global (appelé dans le DOMContentLoaded principal en bas du script
 let brActive       = false;   // partie BR en cours
 let brZoneRadius   = 0;       // rayon actuel de la zone safe
 let brZoneCX       = 0;       // centre X zone actuel
@@ -2300,10 +2155,6 @@ function initAudio() {
     musicGain = audioCtx.createGain(); musicGain.gain.value = 0.35; musicGain.connect(audioCtx.destination);
     sfxGain   = audioCtx.createGain(); sfxGain.gain.value   = 0.6;  sfxGain.connect(audioCtx.destination);
   } catch(e) { console.warn('Audio not supported'); }
-}
-
-function resumeAudio() {
-  if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
 }
 
 // ── SYNTH HELPERS ──
@@ -2442,11 +2293,6 @@ function sfxBoss() {
   if(!sfxEnabled || !audioCtx) return;
   [80,60,40].forEach((f,i) => playTone(f,'sawtooth',0.4,0.5,null,i*0.15));
   playNoise(0.3, 0.3, null, 0.1);
-}
-
-function sfxWallWarn() {
-  if(!sfxEnabled || !audioCtx) return;
-  playTone(220,'square',0.1,0.15);
 }
 
 // ── BACKGROUND MUSIC (procedural) ──
@@ -2659,69 +2505,10 @@ function updateAudioBtns() {
   if(sb) { sb.textContent = sfxEnabled   ? '🔊' : '🔕'; sb.style.opacity = sfxEnabled   ? '1' : '0.45'; }
 }
 
-// ═══════════════════════════════════════════════════════════
-//  🕹️ JOYSTICK VIRTUEL
-// ═══════════════════════════════════════════════════════════
-let joystick = { active:false, baseX:0, baseY:0, dx:0, dy:0, id:null };
 
-function setupJoystick() {
-  return; // joystick supprimé
-  const jBase = document.getElementById('joystickBase');
-  const jThumb = document.getElementById('joystickThumb');
-  if(!jBase) return;
 
-  function onJoyStart(e) {
-    // Ignorer si le touch commence sur un bouton (boost, skills, HUD)
-    const target = e.target;
-    if(target.closest('.boost-btn') || target.closest('.skill-btn') || target.closest('.hud') || target.closest('#lb')) return;
-    resumeAudio();
-    const touch = e.touches ? e.touches[0] : e;
-    joystick.active = true;
-    joystick.id = e.touches ? e.touches[0].identifier : null;
-    joystick.baseX = touch.clientX;
-    joystick.baseY = touch.clientY;
-    jBase.style.left = (touch.clientX - 45) + 'px';
-    jBase.style.top  = (touch.clientY - 45) + 'px';
-    jBase.style.opacity = '1';
-  }
 
-  function onJoyMove(e) {
-    if(!joystick.active) return;
-    let touch = null;
-    if(e.touches) {
-      for(let t of e.touches) { if(t.identifier === joystick.id) { touch=t; break; } }
-    } else touch = e;
-    if(!touch) return;
-    const dx = touch.clientX - joystick.baseX;
-    const dy = touch.clientY - joystick.baseY;
-    const dist = Math.sqrt(dx*dx+dy*dy);
-    const maxR = 40;
-    const clamp = Math.min(dist, maxR);
-    const angle = Math.atan2(dy, dx);
-    joystick.dx = Math.cos(angle) * (clamp/maxR);
-    joystick.dy = Math.sin(angle) * (clamp/maxR);
-    jThumb.style.transform = `translate(${Math.cos(angle)*clamp}px, ${Math.sin(angle)*clamp}px)`;
-  }
 
-  function onJoyEnd(e) {
-    joystick.active = false; joystick.dx = 0; joystick.dy = 0;
-    jBase.style.opacity = '0';
-    jThumb.style.transform = 'translate(0,0)';
-  }
-
-  const gameEl = document.getElementById('gameScreen');
-  if(gameEl) {
-    gameEl.addEventListener('touchstart',  onJoyStart, {passive:false});
-    gameEl.addEventListener('touchmove',   onJoyMove,  {passive:false});
-    gameEl.addEventListener('touchend',    onJoyEnd,   {passive:false});
-    gameEl.addEventListener('touchcancel', onJoyEnd,   {passive:false});
-  }
-}
-
-// initInput appelé au DOMContentLoaded
-function initInput() {
-  setupJoystick();
-}
 
 // ═══════════════════════════════════════════════════════════
 //  🌦️ MÉTÉO SYSTEM
@@ -2806,7 +2593,7 @@ const BR_PHASES = [
   { delay:1320, duration:540,  targetRatio:0.28, label:'⚠️ Zone réduit dans...' }, // 22s + 9s
   { delay:900,  duration:360,  targetRatio:0.14, label:'⚠️ Zone réduit dans...' }, // 15s + 6s
   { delay:540,  duration:240,  targetRatio:0.05, label:'⚠️ Zone réduit dans...' }, // 9s + 4s
-  { delay:300,  duration:180,  targetRatio:0.06, label:'☠️ Zone finale !'       }, // 5s + 3s
+  { delay:300,  duration:180,  targetRatio:0.04, label:'☠️ Zone finale !'       }, // 5s + 3s
 ];
 // Après la dernière phase, la zone continue de se réduire pour forcer le duel final
 
@@ -4837,7 +4624,6 @@ function resetAllGameState() {
 
   // Input
   touchPos = null;
-  joystick = { active:false, baseX:0, baseY:0, dx:0, dy:0, id:null };
 
   // HUD BR
   const _brC = document.getElementById('brChronoHUD');
@@ -5217,17 +5003,6 @@ function gameLoop(timestamp = 0) {
   if(brActive) updateBattleRoyale(gs);
 
   // ── LAST SEEN toutes les 5min ──
-
-  // ── JOYSTICK direction ──
-  if(p.alive && joystick.active && (Math.abs(joystick.dx)>0.05 || Math.abs(joystick.dy)>0.05)) {
-    const targetAngle = Math.atan2(joystick.dy, joystick.dx);
-    let diff = targetAngle - p.angle;
-    while(diff > Math.PI) diff -= Math.PI*2;
-    while(diff < -Math.PI) diff += Math.PI*2;
-    const jForce = Math.sqrt(joystick.dx*joystick.dx + joystick.dy*joystick.dy);
-    const jTurn = (0.16 + jForce * 0.10) * dt;
-    p.angle += Math.max(-jTurn, Math.min(jTurn, diff));
-  }
 
   // ── ZONE EFFECTS on player ──
   if(p.alive && gs.frame % 3 === 0) {
@@ -6440,7 +6215,6 @@ function drawNeonGrid(ctx, camX, camY, w, h) {
 // ═══════════════════════════════════════════════════════════
 let adCallback = null;
 let adTimerInterval = null;
-let _rewardAdCooldown = false;
 let _adOverlayOpen = false;
 
 function reportBug(){
@@ -6587,10 +6361,6 @@ function closeAdAndContinue(){
 
 // Pub récompensée (bouton "Regarder une pub → +500 coins")
 function watchRewardedAd(extraCallback){
-  // Anti-spam : 1 pub récompensée toutes les 60s
-  if(_rewardAdCooldown){ showNotif('⏳ Attends 60s entre deux pubs récompensées.'); return; }
-  _rewardAdCooldown = true;
-  setTimeout(()=>{ _rewardAdCooldown = false; }, 60000);
   // Ne jamais forcer le consentement — l'overlay pub fait office de proxy
   showAdThenDo(()=>{
     earnCoinsFromAd();
@@ -6612,8 +6382,6 @@ function showAdRewardNotif(amount){
   el.style.opacity = '1';
   setTimeout(()=>{ el.style.opacity = '0'; }, 3000);
 }
-
-function closeInterstitial(){ closeAdAndContinue(); }
 
 // Google Analytics — charge uniquement si consentement
 function initAnalytics(hasConsent){
@@ -6675,7 +6443,6 @@ window.addEventListener('DOMContentLoaded',()=>{
   sessionStorage.setItem('sw_from_home', '1'); // accès direct autorisé
 
   initCk();
-  initInput();
   refreshMenu();
   // Restore pseudo
   const saved=localStorage.getItem('sw_pseudo');

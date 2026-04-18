@@ -39,9 +39,8 @@
 <meta name="twitter:title" content="SnakeWars.io — Jeu de Serpent Battle Royale">
 <meta name="twitter:description" content="Le jeu de serpent Battle Royale multijoueur ! Gratuit sur navigateur.">
 <meta name="twitter:image" content="https://snakewars26.github.io/snakewars/preview.png">
-<!-- Google AdSense -->
+<!-- Google AdSense — chargé après consentement RGPD via initAds() uniquement -->
 <meta name="google-adsense-account" content="ca-pub-5433648295830648">
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5433648295830648" crossorigin="anonymous"></script>
 <!-- Ably Realtime SDK -->
 <script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
 
@@ -64,14 +63,7 @@
   gtag('set', 'url_passthrough', true);
 </script>
 
-<!-- Google Analytics GA4 — chargé après Consent Mode -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-9Q04XKXKD2"></script>
-<script>
-  gtag('js', new Date());
-  gtag('config', 'G-9Q04XKXKD2');
-</script>
-
-<!-- AdSense chargé après consentement RGPD via initAds() — ne pas dupliquer ici -->
+<!-- Google Analytics GA4 — chargé après consentement RGPD via initAnalytics() uniquement -->
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@600&family=Exo+2:wght@400;600&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -2147,6 +2139,7 @@ function _showGameOverSW(gs) {
   if(Math.floor(p.length) > (sd.bestLen || 0)) sd.bestLen = Math.floor(p.length);
   const _prevBestScore = sd.bestScore || 0; // snapshot AVANT mise à jour
   if(p.score > _prevBestScore) sd.bestScore = p.score;
+  sd.lastScore = p.score; // score de la dernière partie (pour l'overlay pub)
   sd.totalKills = (sd.totalKills || 0) + p.kills;
   saveSD();
   refreshMenu();
@@ -2656,7 +2649,7 @@ function playGameMusic() {
 
 function toggleMusic() {
   musicEnabled = !musicEnabled;
-  if(musicEnabled) { const _gEl = document.getElementById('game'); startMusic(_gEl && _gEl.classList.contains('active') ? 'game' : 'menu'); }
+  if(musicEnabled) { const _gEl = document.getElementById('gameScreen'); startMusic(_gEl && _gEl.classList.contains('active') ? 'game' : 'menu'); }
   else stopMusic();
   updateAudioBtns();
 }
@@ -2679,57 +2672,8 @@ function updateAudioBtns() {
 let joystick = { active:false, baseX:0, baseY:0, dx:0, dy:0, id:null };
 
 function setupJoystick() {
-  return; // joystick supprimé
-  const jBase = document.getElementById('joystickBase');
-  const jThumb = document.getElementById('joystickThumb');
-  if(!jBase) return;
-
-  function onJoyStart(e) {
-    // Ignorer si le touch commence sur un bouton (boost, skills, HUD)
-    const target = e.target;
-    if(target.closest('.boost-btn') || target.closest('.skill-btn') || target.closest('.hud') || target.closest('#lb')) return;
-    resumeAudio();
-    const touch = e.touches ? e.touches[0] : e;
-    joystick.active = true;
-    joystick.id = e.touches ? e.touches[0].identifier : null;
-    joystick.baseX = touch.clientX;
-    joystick.baseY = touch.clientY;
-    jBase.style.left = (touch.clientX - 45) + 'px';
-    jBase.style.top  = (touch.clientY - 45) + 'px';
-    jBase.style.opacity = '1';
-  }
-
-  function onJoyMove(e) {
-    if(!joystick.active) return;
-    let touch = null;
-    if(e.touches) {
-      for(let t of e.touches) { if(t.identifier === joystick.id) { touch=t; break; } }
-    } else touch = e;
-    if(!touch) return;
-    const dx = touch.clientX - joystick.baseX;
-    const dy = touch.clientY - joystick.baseY;
-    const dist = Math.sqrt(dx*dx+dy*dy);
-    const maxR = 40;
-    const clamp = Math.min(dist, maxR);
-    const angle = Math.atan2(dy, dx);
-    joystick.dx = Math.cos(angle) * (clamp/maxR);
-    joystick.dy = Math.sin(angle) * (clamp/maxR);
-    jThumb.style.transform = `translate(${Math.cos(angle)*clamp}px, ${Math.sin(angle)*clamp}px)`;
-  }
-
-  function onJoyEnd(e) {
-    joystick.active = false; joystick.dx = 0; joystick.dy = 0;
-    jBase.style.opacity = '0';
-    jThumb.style.transform = 'translate(0,0)';
-  }
-
-  const gameEl = document.getElementById('gameScreen');
-  if(gameEl) {
-    gameEl.addEventListener('touchstart',  onJoyStart, {passive:false});
-    gameEl.addEventListener('touchmove',   onJoyMove,  {passive:false});
-    gameEl.addEventListener('touchend',    onJoyEnd,   {passive:false});
-    gameEl.addEventListener('touchcancel', onJoyEnd,   {passive:false});
-  }
+  // Joystick virtuel remplacé par le système slide-to-direct (touchPos sur canvas)
+  // Le joystick object reste déclaré pour compatibilité avec le code de direction
 }
 
 // initInput appelé au DOMContentLoaded
@@ -3448,13 +3392,13 @@ class Snake {
     // Timers
     // Timers basés sur dt — corrects à 30fps ET 60fps
     const dtSec = dt / 60; // dt est normalisé à 60fps, donc /60 = secondes réelles
-    if(this.shieldTimer > 0) { this.shieldTimer -= 1/60; if(this.shieldTimer <= 0) { this.shieldActive = false; this.spawnImmune = false; } }
+    if(this.shieldTimer > 0) { this.shieldTimer -= dtSec; if(this.shieldTimer <= 0) { this.shieldActive = false; this.spawnImmune = false; } }
     if(this.magnetTimer > 0) { this.magnetTimer -= dtSec; if(this.magnetTimer <= 0) this.magnetActive = false; }
     if(this.turboTimer    > 0) this.turboTimer    -= dtSec;
     if(this.overloadTimer > 0) this.overloadTimer -= dtSec;
     if(this.virusTimer    > 0) this.virusTimer    -= dtSec;
     if(this.wallGhostTimer> 0) this.wallGhostTimer -= dtSec;
-    Object.keys(this.skillCDs).forEach(k => { if(this.skillCDs[k] > 0) this.skillCDs[k] -= 1/60; });
+    Object.keys(this.skillCDs).forEach(k => { if(this.skillCDs[k] > 0) this.skillCDs[k] -= dtSec; });
 
     // Boost
     let spd = this.speed * (this.zoneSpeed || 1);
@@ -4734,6 +4678,8 @@ function resetAllGameState() {
   brZoneCY        = WORLD / 2;
   brPrevZoneCX    = WORLD / 2;
   brPrevZoneCY    = WORLD / 2;
+  brPlayerRank    = 0;
+  brEliminationOrder = [];
 
   // Réseau
   stopPositionSync();
@@ -4997,7 +4943,7 @@ document.addEventListener('keydown', e => {
     case 'KeyE':               e.preventDefault(); useSkill(2); break;
     case 'Space': e.preventDefault(); if(gameState.player) gameState.player.boosting = true; break;
     case 'Escape': e.preventDefault(); quitGame(); break;
-    case 'KeyM': const mm = document.getElementById('minimap'); if(mm) mm.style.display = mm.style.display==='none'?'':'none'; break;
+    case 'KeyM': { const mm = document.getElementById('minimap'); if(mm) mm.style.display = mm.style.display==='none'?'':'none'; break; }
   }
 });
 document.addEventListener('keyup', e => {
@@ -5313,18 +5259,7 @@ function gameLoop(timestamp = 0) {
     s.update(gs, dt);
   });
   // Food update supprimé (pulse via Date.now — 0 calcul par frame)
-  // Vent météo : seulement si actif
-  if(currentWeather && (currentWeather.windX || currentWeather.windY)) {
-    const px = gs.player ? gs.player.head.x : WORLD/2;
-    const py = gs.player ? gs.player.head.y : WORLD/2;
-    gs.foods.forEach(f => {
-      const fdx = Math.abs(f.pos.x - px), fdy = Math.abs(f.pos.y - py);
-      if(fdx < 800 && fdy < 800) {
-        f.pos.x += currentWeather.windX * 0.3;
-        f.pos.y += currentWeather.windY * 0.3;
-      }
-    });
-  }
+  // Vent météo : géré uniquement dans updateWeather() — pas de double application ici
   gs.powerups.forEach(p => p.update(dt));
   updateParticles();
 
@@ -5378,7 +5313,7 @@ function gameLoop(timestamp = 0) {
             const coinEarned = Math.ceil(f.value * 0.04 * coinMult);
             gs.coins += coinEarned;
             if(coinEarned > 0 && Math.random() < 0.3) sfxCoin?.();
-            addCollectFlash(s.head.x, s.head.y, f.color || '#ffd700');
+            addCollectFlash(s.head.x, s.head.y, `hsl(${f.hue},100%,65%)`);
           }
           _toRemoveGlobal.add(i);
         }
@@ -6432,7 +6367,7 @@ function showAdThenDo(callback){
   const el = document.getElementById('adStatScore');
   const ek = document.getElementById('adStatKills');
   const ec = document.getElementById('adStatCoins');
-  if(el) el.textContent = sd.bestScore > 0 ? sd.bestScore.toLocaleString() : '—';
+  if(el) el.textContent = (sd.lastScore||0) > 0 ? (sd.lastScore||0).toLocaleString() : '—';
   if(ek) ek.textContent = sd.totalKills > 0 ? sd.totalKills : '—';
   if(ec) ec.textContent = sd.coins > 0 ? sd.coins.toLocaleString() : '—';
 
@@ -6543,8 +6478,6 @@ function initAnalytics(hasConsent){
   s.async=true;s.src='https://www.googletagmanager.com/gtag/js?id=G-9Q04XKXKD2';
   document.head.appendChild(s);
   // Utilise le gtag déjà défini dans <head> (Consent Mode v2) — ne pas redéfinir
-  window.dataLayer=window.dataLayer||[];
-  if(typeof window.gtag!=='function') window.gtag=function(){dataLayer.push(arguments);};
   window.gtag('js',new Date());
   window.gtag('config','G-9Q04XKXKD2',{anonymize_ip:true});
 }
@@ -6611,14 +6544,31 @@ window.addEventListener('DOMContentLoaded',()=>{
 if('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     const swCode = `
-const CACHE = 'snakewars-v1';
-self.addEventListener('install', e => { self.skipWaiting(); });
+const CACHE = 'snakewars-v2';
+const PRECACHE = ['/', '/index.html', '/manifest.json', '/favicon.png'];
+self.addEventListener('install', e => {
+  self.skipWaiting();
+  e.waitUntil(
+    caches.open(CACHE).then(c => c.addAll(PRECACHE).catch(()=>{}))
+  );
+});
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));
   self.clients.claim();
 });
 self.addEventListener('fetch', e => {
-  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+  if(e.request.method !== 'GET') return;
+  e.respondWith(
+    fetch(e.request)
+      .then(res => {
+        if(res && res.status === 200 && res.type === 'basic') {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+        }
+        return res;
+      })
+      .catch(() => caches.match(e.request))
+  );
 });
 `;
     const blob = new Blob([swCode], {type:'text/javascript'});

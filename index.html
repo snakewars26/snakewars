@@ -1042,9 +1042,9 @@ let sd = {
 };
 function loadSD(){
   try{const d=localStorage.getItem('sw_sd');if(d)Object.assign(sd,JSON.parse(d));}catch(e){}
-  if(sd.ownedSkins!==undefined) delete sd.ownedSkins;
-  if(sd.ownedAcc!==undefined)   delete sd.ownedAcc;
-  if(!sd.ownedSkills) sd.ownedSkills = [];
+  if(sd.ownedSkins!==undefined)  delete sd.ownedSkins;
+  if(sd.ownedAcc!==undefined)    delete sd.ownedAcc;
+  if(sd.ownedSkills!==undefined) delete sd.ownedSkills; // plus utile, modèle consommable
   if(!sd.equippedSkills || sd.equippedSkills.length !== 3) sd.equippedSkills = ['shield','magnet','turbo'];
 }
 function saveSD(){
@@ -1061,9 +1061,7 @@ function launchDirect(){
     currentBuild = sd.equippedSkills.map(id => {
       if (!id) return null;
       const skill = ALL_SKILLS.find(s => s.id === id);
-      if (!skill) return null;
-      const isOwned = skill.free || (sd.ownedSkills && sd.ownedSkills.includes(id));
-      return isOwned ? id : null;
+      return skill ? id : null; // Coins déjà déduits à la sélection
     });
   }
   updateSkillHUD();
@@ -1250,23 +1248,37 @@ function renderBuildGrid() {
 
   ALL_SKILLS.forEach(skill => {
     const isSelected = currentBuild.includes(skill.id);
-    const isOwned = skill.free || (sd.ownedSkills && sd.ownedSkills.includes(skill.id));
-    const isLocked = !isOwned;
+    const cost = SKILL_COST[skill.id] || 0;
+    const canAfford = (sd.coins || 0) >= cost;
 
     const card = document.createElement('div');
-    card.className = `build-card ${skill.free ? 'free-card' : 'paid-card'}${isSelected ? ' selected' : ''}${isLocked ? ' locked' : ''}`;
-    const priceHtml = isLocked ? '<div class="bc-price">🪙 ' + (SKILL_COST[skill.id] || 0) + ' coins</div>' : '';
-    const checkHtml = isOwned ? '<div class="bc-check">✓</div>' : '';
+    card.className = `build-card ${skill.free ? 'free-card' : 'paid-card'}${isSelected ? ' selected' : ''}`;
+
+    let badgeHtml = '';
+    if (skill.free) {
+      badgeHtml = '<div class="bc-check">✓ GRATUIT</div>';
+    } else if (isSelected) {
+      badgeHtml = '<div class="bc-check">✓ ÉQUIPÉ −' + cost + '🪙</div>';
+    } else if (canAfford) {
+      badgeHtml = '<div class="bc-price">🪙 ' + cost + ' / manche</div>';
+    } else {
+      badgeHtml = '<div class="bc-price" style="color:#ffd700">📺 Regarder pub</div>';
+    }
+
     card.innerHTML = '<div class="bc-icon">' + skill.icon + '</div>' +
       '<div class="bc-name">' + skill.name + '</div>' +
       '<div class="bc-desc">' + skill.desc + '</div>' +
       '<div class="bc-cd">⏱ CD: ' + skill.cd + 's</div>' +
-      priceHtml + checkHtml;
+      badgeHtml;
 
-    if (isLocked) {
-      card.onclick = () => buySkill(skill.id);
-    } else {
+    if (skill.free) {
       card.onclick = () => toggleSkillInBuild(skill.id);
+    } else if (isSelected) {
+      card.onclick = () => toggleSkillInBuild(skill.id);
+    } else if (canAfford) {
+      card.onclick = () => selectPaidSkill(skill.id);
+    } else {
+      card.onclick = () => watchRewardedAd(() => { selectPaidSkill(skill.id); renderBuildScreen(); });
     }
 
     if (skill.free) gridFree.appendChild(card);
@@ -1296,17 +1308,34 @@ function toggleSkillInBuild(skillId) {
   updateSkillHUD();
 }
 
-function buySkill(skillId) {
+function selectPaidSkill(skillId) {
+  const skill = ALL_SKILLS.find(s => s.id === skillId);
+  if (!skill || skill.free) return;
+
+  // Si déjà dans le build → retirer (pas de remboursement, comme les accessoires)
+  const idx = currentBuild.indexOf(skillId);
+  if (idx >= 0) {
+    currentBuild[idx] = null;
+    sd.equippedSkills = [...currentBuild];
+    saveSD(); renderBuildSlots(); renderBuildGrid(); updateSkillHUD();
+    return;
+  }
+
   const cost = SKILL_COST[skillId] || 0;
   if ((sd.coins || 0) < cost) {
     showNotif('🪙 Pas assez de coins ! Regarde une pub pour en gagner.');
     return;
   }
+
+  // Trouver un slot vide
+  const emptyIdx = currentBuild.indexOf(null);
+  if (emptyIdx < 0) { showNotif('⚠️ Build plein ! Retire un skill d’abord.'); return; }
+
   sd.coins -= cost;
-  if (!sd.ownedSkills) sd.ownedSkills = [];
-  sd.ownedSkills.push(skillId);
+  currentBuild[emptyIdx] = skillId;
+  sd.equippedSkills = [...currentBuild];
   saveSD();
-  showNotif('✅ Skill acheté !');
+  showNotif('✅ Skill équipé pour cette manche ! −' + cost + ' 🪙');
   renderBuildScreen();
 }
 
@@ -1351,7 +1380,7 @@ function renderSkins(){
     } else if(!skin.free && sd.coins<SKIN_COST){
       btnTxt='📺 Regarder une pub (+'+SKIN_COST+'🪙)';
       btnStyle='border-color:#ffd700;color:#ffd700;background:rgba(255,215,0,.08);font-size:.38rem;';
-      btnAction=()=>watchRewardedAd(()=>{ renderSkins(); });
+      btnAction=()=>watchRewardedAd(()=>{ if((sd.coins||0)>=SKIN_COST) selectSkin(skin.id); else renderSkins(); });
     } else {
       btnTxt=skin.free?'CHOISIR':'ÉQUIPER (−'+SKIN_COST+'🪙/manche)';
       btnStyle='border-color:#00f5ff;color:#00f5ff;background:rgba(0,245,255,.08);';
@@ -1446,7 +1475,7 @@ function renderAccessories(){
     const btn=document.createElement('button');btn.className='acc-btn';
     btn.style.cssText=btnStyle;btn.textContent=btnTxt;
     if(equipped||canAfford) btn.onclick=()=>selectAcc(acc.id);
-    else btn.onclick=()=>watchRewardedAd(()=>{ renderAccessories(); });
+    else btn.onclick=()=>watchRewardedAd(()=>{ if((sd.coins||0)>=ACC_COST) selectAcc(acc.id); else renderAccessories(); });
     card.appendChild(btn);
     g.appendChild(card);
   });
@@ -2034,10 +2063,19 @@ function _showGameOverSW(gs) {
   // Afficher total coins
   const dCoinsEl = document.getElementById('dCoins');
   if(dCoinsEl) dCoinsEl.textContent = '🪙 ' + (sd.coins || 0) + ' coins';
-  // Après la manche : skin gratuit + accessoires vidés
+  // Après la manche : tout reset aux gratuits (consommables par manche)
   const _freeSkins = SKINS.filter(s=>s.free);
   sd.equippedSkin = _freeSkins[0].id;
   sd.equippedAcc = [];
+  // Reset build : ne garder que les skills gratuits
+  if (sd.equippedSkills && sd.equippedSkills.length === 3) {
+    sd.equippedSkills = sd.equippedSkills.map(id => {
+      if (!id) return null;
+      const skill = ALL_SKILLS.find(s => s.id === id);
+      return (skill && skill.free) ? id : null;
+    });
+  }
+  currentBuild = sd.equippedSkills ? [...sd.equippedSkills] : [null, null, null];
   saveSD();
   showScreen('deathScreen');
 }
@@ -2104,6 +2142,20 @@ function quitGame(){
     saveSD();
     refreshMenu();
   }
+  // Reset consommables (comme showGameOver)
+  const _qFreeSkins = SKINS.filter(s => s.free);
+  if (_qFreeSkins.length) sd.equippedSkin = _qFreeSkins[0].id;
+  sd.equippedAcc = [];
+  if (sd.equippedSkills && sd.equippedSkills.length === 3) {
+    sd.equippedSkills = sd.equippedSkills.map(id => {
+      if (!id) return null;
+      const skill = ALL_SKILLS.find(s => s.id === id);
+      return (skill && skill.free) ? id : null;
+    });
+  }
+  currentBuild = sd.equippedSkills ? [...sd.equippedSkills] : [null, null, null];
+  saveSD();
+
   showScreen('deathScreen');
 }
 let brActive       = false;   // partie BR en cours

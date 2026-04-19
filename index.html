@@ -998,6 +998,8 @@ const SKINS = [
   {id:30, name:'🇲🇽 Mexique',      head:'#006847', body:['#006847','#ffffff','#ce1126','#ffffff','#006847'],        free:false, flag:'🇲🇽'},
   {id:31, name:'🇦🇷 Argentine',    head:'#74acdf', body:['#74acdf','#ffffff','#74acdf','#f6b40e','#74acdf'],        free:false, flag:'🇦🇷'},
 ];
+// Opt 8: Map pré-indexée — O(1) au lieu de O(n) pour chaque getSkin() (appelé drawAccessories, drawRemotePlayers, minimap...)
+const _SKINS_MAP = new Map(SKINS.map(s => [s.id, s]));
 
 // ═══════════════════════════════════════════════
 // ACCESSORIES — tous payants (250 coins, valable 1 manche)
@@ -1679,11 +1681,14 @@ function startPositionSync() {
       if (!p || !p.alive || !ablyChannel) return;
       if (ablyClient?.connection?.state !== 'connected') return; // évite les erreurs 90003
 
-      // Échantillonner le corps : 1 point sur 4, max 12 points (corps cosmétique uniquement)
-      const pathSample = p.path
-        ? p.path.filter((_, i) => i % 4 === 0).slice(0, 12)
-                .map(pt => ({ x: ~~pt.x, y: ~~pt.y }))
-        : [];
+      // Opt 7: boucle directe — zéro alloc (filter+slice+map créait 3 arrays × 10msg/s)
+      const pathSample = [];
+      if(p.path) {
+        for(let _pi = 0; _pi < p.path.length && pathSample.length < 12; _pi += 4) {
+          const pt = p.path[_pi];
+          if(pt) pathSample.push({ x: ~~pt.x, y: ~~pt.y });
+        }
+      }
 
       ablyChannel.publish('pos', {
         id:       myPlayerId,
@@ -1791,7 +1796,7 @@ function interpolateRemotePlayers() {
 }
 function updateMenu(){ refreshMenu(); }
 function getSkin(id) {
-  return SKINS.find(s => s.id === id) || SKINS[0];
+  return _SKINS_MAP.get(id) || SKINS[0];
 }
 function hasStat(){ return false; }
 function getVipCoinMult(){ return 1; }
@@ -3032,7 +3037,7 @@ function showBRResultPopup(gs, rank) {
 let _brTimeCached = '0:00', _brTimeCacheFrame = -99;
 function getBRTimeLeft() {
   // #9 FIX: throttle — recalcul seulement si le frame a changé d'au moins 60 unités (~1s)
-  const _curFrame = gameState ? gameState.frame : 0;
+  const _curFrame = gameState?.frame ?? 0;
   if(_curFrame - _brTimeCacheFrame < 60) return _brTimeCached;
   _brTimeCacheFrame = _curFrame;
   // Calcule le temps total restant dans la BR
@@ -3261,6 +3266,7 @@ class Snake {
     this.overloadTimer = 0;
     this.virusTimer    = 0;
     this.wallGhostTimer = 0;
+    this.zoneSpeed      = 1;   // Fix: explicite — évite undefined silencieux si guard || 1 oublié
     this.skillCDs = { shield:0, magnet:0, bomb:0 };
     this.bonuses = [];
 
@@ -4720,6 +4726,10 @@ function resetAllGameState() {
   // Arrêter la boucle de jeu en cours
   if(animId) { cancelAnimationFrame(animId); animId = null; }
 
+  // Invalider l'état de jeu précédent — évite lectures périmées entre deux parties
+  // (getBRTimeLeft, guards gameState?.frame, etc.)
+  gameState = null;
+
   // Modes
   brActive        = false;
   brPhase         = 0;
@@ -4766,6 +4776,9 @@ function resetAllGameState() {
 
   // Save timer
   if(_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
+
+  // Cache BR time — évite retour de '0:00' pendant les 60 premiers frames d'une nouvelle partie
+  _brTimeCacheFrame = -99;
 }
 
 // ── GAME INIT ──
@@ -4790,6 +4803,8 @@ function _cacheHUDRefs() {
   _dom.lbExtra     = document.getElementById('lbExtra');  // Fix B
   _dom.notif       = document.getElementById('notif');    // Fix F
   _dom.gameScreen  = document.getElementById('gameScreen'); // Fix G
+  _dom.lbRows      = document.getElementById('lbRows');   // Fix: évite getElementById 1×/s
+  _dom.lbHeader    = document.getElementById('lbHeader'); // Fix: toggleLeaderboard
 }
 const SHOP_ITEMS = []; // pas de boutique dans cette version
 function startGame(mode='battleroyale', realPlayerCount=0) {
@@ -4962,7 +4977,7 @@ function setupControls() {
   }
   document.addEventListener('pointermove', (e) => {
     if(IS_MOBILE) return;
-    if(!document.getElementById('gameScreen')?.classList.contains('active')) return;
+    if(!_dom.gameScreen?.classList.contains('active')) return;
     updateMousePos(e.clientX, e.clientY);
   });
   canvas.addEventListener('pointerdown', (e) => {
@@ -5007,7 +5022,7 @@ function useSkill(slotIndex) {
 // ── KEYBOARD PC (copié de serpex) ──
 document.addEventListener('keydown', e => {
   if(IS_MOBILE) return;
-  const gameActive = document.getElementById('gameScreen')?.classList.contains('active');
+  const gameActive = _dom.gameScreen?.classList.contains('active');
   if(!gameActive || !gameState?.player?.alive) return;
   switch(e.code) {
     case 'KeyA': case 'KeyQ': e.preventDefault(); useSkill(0); break;
@@ -5085,7 +5100,7 @@ const _snakeGrid      = new Map();
 const _toRemoveGlobal = new Set();
 
 function gameLoop(timestamp = 0) {
-  const gameEl = document.getElementById('gameScreen');
+  const gameEl = _dom.gameScreen; // ref cachée — pas de getElementById à chaque frame
   // Si gameScreen pas encore active (timing race au lancement), on réessaie au frame suivant
   if(!gameEl || !gameEl.classList.contains('active')) {
     animId = requestAnimationFrame(gameLoop);
@@ -5166,6 +5181,7 @@ function gameLoop(timestamp = 0) {
   // ── ZONE EFFECTS on player ──
   if(p.alive && gs.frame % 3 === 0) {
     let inSpeed = false;
+    let inDanger = false;
     let currentZoneLabel = null;
     ZONES.forEach(z => {
       const dx = p.head.x - z.x, dy = p.head.y - z.y;
@@ -5191,8 +5207,8 @@ function gameLoop(timestamp = 0) {
           p.energy = Math.max(0, p.energy - 12);
           spawnScorePopup('☠️-12', p.head);
         }
-        // Ralentissement dans la zone danger
-        p.zoneSpeed = 0.7;
+        // Marquer danger — zoneSpeed appliqué après forEach uniquement si pas SPEED
+        inDanger = true;
         // Avertissement visuel si énergie critique
         if(p.energy < 30 && gs.frame % 60 === 0) {
           showNotif('☠️ ZONE DANGER — Fuyez !');
@@ -5203,7 +5219,9 @@ function gameLoop(timestamp = 0) {
         spawnScorePopup('💚+8', p.head);
       }
     });
-    if(!inSpeed && !currentZoneLabel?.includes('DANGER')) p.zoneSpeed = 1;
+    // DANGER ne ralentit que si SPEED n'est pas active (priorité SPEED > DANGER)
+    if(inDanger && !inSpeed) p.zoneSpeed = 0.7;
+    if(!inSpeed && !inDanger) p.zoneSpeed = 1;
     // Mettre à jour le label brInfo dynamiquement
     const brInfoEl = _dom.brInfo; // #6 FIX: cached ref
     if(brInfoEl) {
@@ -5610,28 +5628,29 @@ function gameLoop(timestamp = 0) {
   const drawMargin = 300;
   const halfCW = canvas.width * 0.5 + drawMargin;
   const halfCH = canvas.height * 0.5 + drawMargin;
-  const visSnakes = gs.snakes.filter(s => {
-    if(!s.alive) return false;
+  // Opt 6: itération directe — pas d'array intermédiaire (zéro alloc, ~6000 économies/s)
+  for(let _si = 0; _si < gs.snakes.length; _si++) {
+    const s = gs.snakes[_si];
+    if(!s.alive) continue;
     // Vérifier la tête d'abord (cas le plus fréquent)
     const sx = s.head.x - renderCam.x;
     const sy = s.head.y - renderCam.y;
-    if(sx > -halfCW && sx < halfCW && sy > -halfCH && sy < halfCH) return true;
-    // FIX: si la tête est hors vue, vérifier si une partie du corps est visible
-    // Sinon le corps reste collidable mais invisible → morts injustes
-    const checkEvery = Math.max(1, Math.floor(s.path.length / 8));
-    for(let i = checkEvery; i < s.path.length; i += checkEvery) {
-      const pt = s.path[i];
-      if(!pt) continue;
-      const bx = pt.x - renderCam.x;
-      const by = pt.y - renderCam.y;
-      if(bx > -halfCW && bx < halfCW && by > -halfCH && by < halfCH) return true;
+    let visible = (sx > -halfCW && sx < halfCW && sy > -halfCH && sy < halfCH);
+    if(!visible) {
+      // FIX: si la tête est hors vue, vérifier si une partie du corps est visible
+      const checkEvery = Math.max(1, Math.floor(s.path.length / 8));
+      for(let i = checkEvery; i < s.path.length; i += checkEvery) {
+        const pt = s.path[i];
+        if(!pt) continue;
+        const bx = pt.x - renderCam.x;
+        const by = pt.y - renderCam.y;
+        if(bx > -halfCW && bx < halfCW && by > -halfCH && by < halfCH) { visible = true; break; }
+      }
     }
-    return false;
-  });
-  visSnakes.forEach(s => {
+    if(!visible) continue;
     if(s.isBoss) { s.drawBoss(ctx, renderCam); }
     else { s.draw(ctx, renderCam); ctx.globalAlpha = 1; ctx.shadowBlur = 0; ctx.globalCompositeOperation = 'source-over'; drawAccessories(ctx, s, renderCam); }
-  });
+  }
 
   // Particles
   drawParticles(ctx, renderCam);
@@ -5672,39 +5691,39 @@ function gameLoop(timestamp = 0) {
   if(p && p.alive && !p.shieldActive && !gs.gameOverTriggered) {
     // Ghost : un joueur fantôme est intouchable ET ne peut pas tuer les distants
     if(p.wallGhostTimer <= 0 && !hasStat('wallGhost')) {
-    const pSize = p.size || 8;
-    for (const id in remotePlayers) {
-      const rp = remotePlayers[id];
-      if (!rp || !rp.alive || !rp.head) continue;
-      const rpSize = rp.size || 8;
-      const collR  = (pSize + rpSize) * 0.85; // rayon de collision combiné
+      const pSize = p.size || 8;
+      for (const id in remotePlayers) {
+        const rp = remotePlayers[id];
+        if (!rp || !rp.alive || !rp.head) continue;
+        const rpSize = rp.size || 8;
+        const collR  = (pSize + rpSize) * 0.85; // rayon de collision combiné
 
-      // Collision tête-à-tête
-      const dhx = p.head.x - rp.head.x;
-      const dhy = p.head.y - rp.head.y;
-      if (dhx * dhx + dhy * dhy < collR * collR) {
-        showNotif(`💀 Écrasé par ${rp.pseudo || 'un joueur'} !`);
-        killSnake(p, gs, false);
-        break;
-      }
-
-      // Collision tête du joueur → corps du distant (vérifier 1 segment sur 2 pour la perf)
-      if (p.alive && rp.path && rp.path.length > 4) {
-        let hitBody = false;
-        const bodyR = (pSize + rpSize * 0.7);
-        const bodyR2 = bodyR * bodyR;
-        for (let i = 0; i < rp.path.length; i += 2) {
-          const bx = p.head.x - rp.path[i].x;
-          const by = p.head.y - rp.path[i].y;
-          if (bx * bx + by * by < bodyR2) { hitBody = true; break; }
-        }
-        if (hitBody) {
-          showNotif(`💀 Coupé par ${rp.pseudo || 'un joueur'} !`);
+        // Collision tête-à-tête
+        const dhx = p.head.x - rp.head.x;
+        const dhy = p.head.y - rp.head.y;
+        if (dhx * dhx + dhy * dhy < collR * collR) {
+          showNotif(`💀 Écrasé par ${rp.pseudo || 'un joueur'} !`);
           killSnake(p, gs, false);
           break;
         }
+
+        // Collision tête du joueur → corps du distant (vérifier 1 segment sur 2 pour la perf)
+        if (p.alive && rp.path && rp.path.length > 4) {
+          let hitBody = false;
+          const bodyR = (pSize + rpSize * 0.7);
+          const bodyR2 = bodyR * bodyR;
+          for (let i = 0; i < rp.path.length; i += 2) {
+            const bx = p.head.x - rp.path[i].x;
+            const by = p.head.y - rp.path[i].y;
+            if (bx * bx + by * by < bodyR2) { hitBody = true; break; }
+          }
+          if (hitBody) {
+            showNotif(`💀 Coupé par ${rp.pseudo || 'un joueur'} !`);
+            killSnake(p, gs, false);
+            break;
+          }
+        }
       }
-    }
     } // fin ghost check
   }
 
@@ -6150,35 +6169,35 @@ function updateHUD(gs) {
 }
 
 function updateLeaderboard(gs) {
-  const lbRows  = document.getElementById('lbRows');
+  const lbRows  = _dom.lbRows;
   const lbExtra = _dom.lbExtra;
   if(!lbRows) return;
-  const all = gs.snakes
-    .filter(s => s.alive && !s.isBoss)
-    .sort((a,b) => b.score - a.score);
-  const top5  = all.slice(0, 5);
-  const next5 = all.slice(5, 10);
-  lbRows.innerHTML = top5.map((s, i) => {
-    const isMe = s.isPlayer;
-    return `<div class="lb-e${isMe?' me':''}">${i+1}. ${esc(s.name)} — ${s.score}</div>`;
-  }).join('');
-  // Rangs 6-10 dans lbExtra (visible seulement si toggle ouvert)
-  if(lbExtra) {
-    lbExtra.innerHTML = next5.length
-      ? next5.map((s, i) => {
-          const isMe = s.isPlayer;
-          return `<div class="lb-e${isMe?' me':''}" style="opacity:.6">${i+6}. ${esc(s.name)} — ${s.score}</div>`;
-        }).join('')
-      : '';
+  // Fix: insertion directe dans top10 — zéro filter/sort/slice (3 arrays intermédiaires évités)
+  const top10 = [];
+  for(let _i = 0; _i < gs.snakes.length; _i++) {
+    const s = gs.snakes[_i];
+    if(!s.alive || s.isBoss) continue;
+    let ins = top10.length;
+    while(ins > 0 && top10[ins-1].score < s.score) ins--;
+    if(ins < 10) { top10.splice(ins, 0, s); if(top10.length > 10) top10.pop(); }
   }
+  let html1 = '', html2 = '';
+  for(let _i = 0; _i < top10.length; _i++) {
+    const s = top10[_i];
+    const me = s.isPlayer ? ' me' : '';
+    if(_i < 5)      html1 += `<div class="lb-e${me}">${_i+1}. ${esc(s.name)} — ${s.score}</div>`;
+    else if(_i < 10) html2 += `<div class="lb-e${me}" style="opacity:.6">${_i+1}. ${esc(s.name)} — ${s.score}</div>`;
+  }
+  lbRows.innerHTML = html1;
+  if(lbExtra) lbExtra.innerHTML = html2;
 }
 
 let lbOpen = false;
 function toggleLeaderboard() {
   lbOpen = !lbOpen;
-  const hdr = document.getElementById('lbHeader');
-  const ext = document.getElementById('lbExtra');
-  if(hdr) hdr.textContent = (lbOpen ? '▾' : '▸') + ' CLASSEMENT'; // flèche cohérente
+  const hdr = _dom.lbHeader;
+  const ext = _dom.lbExtra;
+  if(hdr) hdr.textContent = (lbOpen ? '▾' : '▸') + ' CLASSEMENT';
   if(ext) ext.classList.toggle('open', lbOpen);
 }
 
@@ -6199,7 +6218,7 @@ function updateSkillUI(p, dt) {
   }
 }
 
-async function showGameOver(gs) {
+function showGameOver(gs) {
   cancelAnimationFrame(animId);
   _showGameOverSW(gs);
 }

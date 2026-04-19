@@ -4229,12 +4229,15 @@ class Snake {
 
     // ── PASSE 2 : corps principal coloré ──
     const _flagPat = skinData.flag ? _FLAG_PATTERNS.get(skinData.id) : null;
-    // Ancrer le pattern sur la caméra 1 seule fois (pas par segment — trop cher)
+    // Ancrer le pattern sur la TÊTE du serpent (canvas-space) — le drapeau reste
+    // peint sur le corps et grandit avec le serpent sans jamais défiler.
     if(_flagPat) {
       try {
+        const _headCX = this.path[0].x - cam.x + cw*0.5;
+        const _headCY = this.path[0].y - cam.y + ch*0.5;
         _flagPat.setTransform(new DOMMatrix().translateSelf(
-          ((cw*0.5 - cam.x) % 96 + 96) % 96,
-          ((ch*0.5 - cam.y) % 64 + 64) % 64
+          (_headCX % 96 + 96) % 96,
+          (_headCY % 64 + 64) % 64
         ));
       } catch(e) {} // setTransform non supporté sur Firefox < 99 — fallback silencieux
     }
@@ -5420,6 +5423,12 @@ const IS_MOBILE  = /Android|iPhone|iPad/i.test(navigator.userAgent);
 const FRAME_MS   = 16.67; // 60fps partout — fluidité maximale
 const GLOW_ON    = !IS_MOBILE; // shadowBlur désactivé sur mobile (gain GPU)
 
+// Reset lastTime quand l'onglet revient au premier plan (veille, changement d'onglet…)
+// Évite un dt aberrant (ex: rawDt = 30 000ms) au retour qui causerait des snaps de caméra.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) lastTime = 0;
+});
+
 // ── Dessiner les joueurs distants ──
 function drawRemotePlayers(ctx, cam, nowMs) {
   if (!remotePlayers || !cam) return;
@@ -5443,9 +5452,10 @@ function drawRemotePlayers(ctx, cam, nowMs) {
     const _rpPat = (skin?.flag && _FLAG_PATTERNS.has(skin.id)) ? _FLAG_PATTERNS.get(skin.id) : null;
     if(_rpPat) {
       try {
+        // hx/hy = position canvas de la tête — même ancrage que le serpent local
         _rpPat.setTransform(new DOMMatrix().translateSelf(
-          ((cw2 - camX) % 96 + 96) % 96,
-          ((ch2 - camY) % 64 + 64) % 64
+          (hx % 96 + 96) % 96,
+          (hy % 64 + 64) % 64
         ));
       } catch(e) {}
     }
@@ -5972,8 +5982,10 @@ function gameLoop(timestamp = 0) {
   const camLerp = p.alive && p.boosting ? 0.08 : 0.12;
   if (!gs.lastCam) gs.lastCam = { x: targetCamX, y: targetCamY };
   else {
-    gs.lastCam.x += (targetCamX - gs.lastCam.x) * camLerp * dt;
-    gs.lastCam.y += (targetCamY - gs.lastCam.y) * camLerp * dt;
+    // Math.min(…, 1) : empêche l'overshoot si dt est anormalement grand (retour de veille)
+    const _cl = Math.min(camLerp * dt, 1.0);
+    gs.lastCam.x += (targetCamX - gs.lastCam.x) * _cl;
+    gs.lastCam.y += (targetCamY - gs.lastCam.y) * _cl;
   }
 
   // (wall collision now handled directly inside snake.update())
@@ -6036,7 +6048,8 @@ function gameLoop(timestamp = 0) {
     // Vérifier la tête d'abord (cas le plus fréquent)
     const sx = s.head.x - renderCam.x;
     const sy = s.head.y - renderCam.y;
-    let visible = (sx > -halfCW && sx < halfCW && sy > -halfCH && sy < halfCH);
+    // Le serpent joueur n'est jamais culled — il doit toujours être visible
+    let visible = s.isPlayer || (sx > -halfCW && sx < halfCW && sy > -halfCH && sy < halfCH);
     if(!visible) {
       // FIX: si la tête est hors vue, vérifier si une partie du corps est visible
       const checkEvery = Math.max(1, Math.floor(s.path.length / 8));

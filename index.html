@@ -218,6 +218,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
 .lb-t{font-family:'Orbitron',monospace;font-size:.4rem;color:rgba(255,255,255,.26);letter-spacing:.12em;margin-bottom:.22rem}
 .lb-e{font-size:clamp(.46rem,1.7vw,.58rem);color:rgba(255,255,255,.6);padding:1px 0}
 .lb-e.me{color:#39ff14;font-weight:700}
+#lbExtra{display:none}#lbExtra.open{display:block!important}
+#lb{pointer-events:auto}/* #1 FIX: toggle cliquable */
 #minimap{position:absolute;bottom:clamp(168px,22vw,180px);right:clamp(5px,1.8vw,10px);
   border-radius:9px;border:1px solid rgba(0,212,255,.2);overflow:hidden;z-index:35;background:rgba(5,8,20,.8)}
 #brHUD{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
@@ -599,12 +601,12 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
   
   <div id="killFeed"></div>
   <!-- Leaderboard avec header cliquable -->
-  <div id="lb"><div class="lb-t" id="lbHeader" onclick="toggleLeaderboard()" style="cursor:pointer;">▸ CLASSEMENT</div><div id="lbRows"></div><div id="lbExtra" style="display:none;"></div></div>
+  <div id="lb"><div class="lb-t" id="lbHeader" onclick="toggleLeaderboard()" style="cursor:pointer;">▸ CLASSEMENT</div><div id="lbRows"></div><div id="lbExtra"></div></div>
   <div id="brHUD">
     <div class="br-info" id="brInfo">⬤ ZONE SÉCURISÉE</div>
     <div id="brCount">25 joueurs</div>
   </div>
-  <div id="minimap"><canvas id="mmCvs" width="105" height="105"></canvas></div>
+  <div id="minimap"><canvas id="mmCvs" width="90" height="90"></canvas></div>
   <div id="notif"></div>
   <!-- BR Chrono HUD -->
   <div id="brChronoHUD" style="display:none;position:absolute;top:clamp(8px,2vw,12px);left:50%;transform:translateX(-50%);right:auto;background:rgba(5,8,20,.82);border:1px solid rgba(255,0,110,.3);border-radius:9px;padding:.28rem .6rem;text-align:center;pointer-events:none;z-index:36;" class="">
@@ -781,7 +783,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
       <h3>CRÉATEUR</h3>
       <p>Développé de manière indépendante par serpex-game26.<br>Contact : <a href="mailto:hervecaporale17@gmail.com" style="color:#00d4ff;">hervecaporale17@gmail.com</a></p>
       <h3>VERSION</h3>
-      <p>SnakeWars.io v2.2 — Hébergé sur GitHub Pages. Dernière mise à jour : mars 2026.</p>
+      <p>SnakeWars.io v2.5 — Hébergé sur GitHub Pages. Dernière mise à jour : avril 2026.</p>
     </div>
     <button class="leg-back" onclick="showScreen('menuScreen')">← RETOUR</button>
   </div>
@@ -791,7 +793,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
   <div class="leg-w">
     <div class="leg-t">🔒 POLITIQUE DE CONFIDENTIALITÉ</div>
     <div class="leg-b">
-      <p><em>Dernière mise à jour : mars 2026</em></p>
+      <p><em>Dernière mise à jour : avril 2026</em></p>
 
       <h3>1. RESPONSABLE DU TRAITEMENT</h3>
       <p>SnakeWars.io — projet indépendant géré par serpex-game26.<br>
@@ -1351,7 +1353,7 @@ function updateSkillHUD() {
 
 function openSkins(){refreshMenu();renderSkins();showScreen('skinsScreen');}
 function renderSkins(){
-  document.getElementById('skCoins').textContent=sd.coins+' 🪙';
+  document.getElementById('skCoins').textContent=sd.coins;
   const g=document.getElementById('skinsGrid');g.innerHTML='';
   function addSectionTitle(label,color){
     const sep=document.createElement('div');
@@ -1451,7 +1453,7 @@ function selectSkin(id){
 // ═══════════════════════════════════════════════
 function openAccessories(){refreshMenu();renderAccessories();showScreen('accessScreen');}
 function renderAccessories(){
-  document.getElementById('accCoins').textContent=sd.coins+' 🪙';
+  document.getElementById('accCoins').textContent=sd.coins;
   const g=document.getElementById('accGrid');g.innerHTML='';
   ACCESSORIES.forEach(acc=>{
     const equipped=sd.equippedAcc.includes(acc.id);
@@ -2186,8 +2188,8 @@ let brEliminationOrder = [];  // ordre d'élimination pour podium
 // Plus il y a de monde, plus la zone est grande. Dès qu'il reste 1 joueur → victoire.
 // Phases BR : durées réduites pour des manches plus rapides (~3-4min total)
 function showNotif(msg) {
-  // Utilise l'élément #notif du HUD (défini dans le HTML)
-  const n = document.getElementById('notif');
+  // Fix F: _dom.notif caché (getElementById à chaque notif = inutile)
+  const n = _dom.notif || document.getElementById('notif');
   if(n) {
     n.textContent = msg;
     n.style.opacity = '1';
@@ -2586,8 +2588,8 @@ let currentWeather = WEATHERS[0];
 let weatherTimer = 1800;
 let rainDrops = [];
 
-function updateWeather(gs) {
-  weatherTimer--;
+function updateWeather(gs, dt=1) { // #2 FIX: dt-aware
+  weatherTimer -= dt;
   if(weatherTimer <= 0) {
     currentWeather = WEATHERS[Math.floor(Math.random()*WEATHERS.length)];
     weatherTimer = currentWeather.duration;
@@ -2750,7 +2752,7 @@ function initBattleRoyale(gs) {
   });
 }
 
-function updateBattleRoyale(gs) {
+function updateBattleRoyale(gs, dt=1) { // Fix C: dt-aware
   if(!brActive) return;
   if(!gs || !gs.snakes) return; // guard anti-crash
   if(!gs.player || !gs.player.head) return; // guard joueur nul
@@ -2760,9 +2762,9 @@ function updateBattleRoyale(gs) {
   // Guard : si toutes les phases sont épuisées, continuer à rétrécir jusqu'à 0
   if(brPhase >= BR_PHASES.length) {
     // Zone qui se réduit progressivement vers 0 pour forcer le duel final
-    brZoneRadius = Math.max(0, brZoneRadius - 0.15);
+    brZoneRadius = Math.max(0, brZoneRadius - 0.15 * dt); // Fix E: dt-aware
   } else {
-    brShrinkTimer--;
+    brShrinkTimer -= dt; // Fix C: dt-aware (était -- = frame-dépendant)
     const phase = BR_PHASES[brPhase];
 
     // Rétrécissement progressif pendant la durée de la phase
@@ -2807,23 +2809,23 @@ function updateBattleRoyale(gs) {
     const dx = s.head.x - brZoneCX, dy = s.head.y - brZoneCY;
     const dist = Math.sqrt(dx*dx+dy*dy);
     if(dist > brZoneRadius) {
-      s._brDamageTick = (s._brDamageTick||0) + 1;
+      s._brDamageSec = (s._brDamageSec||0) + dt/60; // Fix D: secondes réelles (était frame-dépendant)
       // Bots hors zone : boost immédiat (la priorité de direction est gérée dans updateAI)
       if(!s.isPlayer) {
         s.boosting = true; // force le boost pour sortir vite
       }
       // Dégâts progressifs après 3s hors zone
-      if(s._brDamageTick > 180) {
-        s.length = Math.max(5, s.length - 0.3);
+      if(s._brDamageSec > 3) {
+        s.length = Math.max(5, s.length - 0.3 * dt); // Fix D: dégâts dt-aware
         if(s.isPlayer) {
-          if(s._brDamageTick % 60 === 0) showNotif('☠️ Zone dangereuse !');
+          if(Math.floor(s._brDamageSec) !== Math.floor(s._brDamageSec - dt/60)) showNotif('☠️ Zone dangereuse !'); // ~1/s
           if(s.length <= 5 && s.alive) killSnake(s, gs, false);
         } else if(s.alive && s.length <= 5) {
           killSnake(s, gs, false);
         }
       }
     } else {
-      s._brDamageTick = 0;
+      s._brDamageSec = 0; // Fix D: reset en secondes
     }
   });
 
@@ -3026,7 +3028,13 @@ function showBRResultPopup(gs, rank) {
   document.body.appendChild(popup);
 }
 
+// #9 FIX: résultat caché — getBRTimeLeft() ne recalcule que 1×/s (brShrinkTimer change à chaque frame)
+let _brTimeCached = '0:00', _brTimeCacheFrame = -99;
 function getBRTimeLeft() {
+  // #9 FIX: throttle — recalcul seulement si le frame a changé d'au moins 60 unités (~1s)
+  const _curFrame = gameState ? gameState.frame : 0;
+  if(_curFrame - _brTimeCacheFrame < 60) return _brTimeCached;
+  _brTimeCacheFrame = _curFrame;
   // Calcule le temps total restant dans la BR
   let frames = Math.max(0, brShrinkTimer);
   // Ajouter les phases restantes
@@ -3045,7 +3053,8 @@ function getBRTimeLeft() {
   const secs = Math.ceil(frames / 60);
   const m = Math.floor(secs / 60);
   const s = secs % 60;
-  return `${m}:${s.toString().padStart(2,'0')}`;
+  _brTimeCached = `${m}:${s.toString().padStart(2,'0')}`;
+  return _brTimeCached;
 }
 
 function drawBattleRoyaleZone(ctx, camX, camY) {
@@ -3087,9 +3096,9 @@ function drawBattleRoyaleZone(ctx, camX, camY) {
   ctx.restore();
 
   // ── Mise à jour DOM chrono BR (dans le hud-top) ──
-  const _brChrono = document.getElementById('brChronoHUD');
-  const _brTimeEl = document.getElementById('brChronoTime');
-  const _brAliveEl = document.getElementById('brChronoAlive');
+  const _brChrono  = _dom.brChronoHUD;  // #6 FIX: cached
+  const _brTimeEl  = _dom.brChronoTime;
+  const _brAliveEl = _dom.brChronoAlive;
   if(_brChrono && _brTimeEl && _brAliveEl) {
     _brChrono.classList.add('active');
     const _tl = getBRTimeLeft();
@@ -3105,12 +3114,12 @@ function drawBattleRoyaleZone(ctx, camX, camY) {
     const dx = p.head.x - brZoneCX, dy = p.head.y - brZoneCY;
     const dist = Math.sqrt(dx*dx+dy*dy);
     if(dist > brZoneRadius) {
-      const damage = p._brDamageTick || 0;
+      const damage = p._brDamageSec || 0; // Fix D: secondes réelles
       ctx.save();
-      const dmgAlpha = 0.12 + (damage > 60 ? 0.08 : 0);
+      const dmgAlpha = 0.12 + (damage > 1 ? 0.08 : 0); // Fix D: >1s au lieu de >60 frames
       ctx.fillStyle = `rgba(255,0,0,${dmgAlpha})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = damage > 60 ? '#ff0000' : '#ff6600';
+      ctx.fillStyle = damage > 1 ? '#ff0000' : '#ff6600'; // Fix D
       ctx.font = 'bold 16px Orbitron,Arial';
       ctx.textAlign = 'center';
       ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 20;
@@ -3330,8 +3339,12 @@ class Snake {
     }
 
     // Déplacer la tête — dt compense les variations de framerate
-    const dir = Vec2.fromAngle(this.angle, spd * dt);
-    const newHead = this.path[0].add(dir);
+    // #4 FIX: inline sans allocation Vec2 (économise ~200 allocs/frame)
+    const _moveSpd = spd * dt;
+    const _dx = Math.cos(this.angle) * _moveSpd;
+    const _dy = Math.sin(this.angle) * _moveSpd;
+    const _head0 = this.path[0];
+    const newHead = new Vec2(_head0.x + _dx, _head0.y + _dy);
 
     const ghost = hasStat('wallGhost') || this.wallGhostTimer > 0;
     if(ghost) {
@@ -3438,8 +3451,8 @@ class Snake {
       let bossDangerBody = null, bossDangerBodyDist = 9999;
       for(const s of gs.snakes) {
         if(s === this || !s.alive || s.isBoss) continue;
-        const sd = this.head.dist(s.head);
-        if(sd > 400) continue;
+        const bossDist = this.head.dist(s.head);
+        if(bossDist > 400) continue;
         const checkN = Math.min(s.path.length, 18);
         for(let si = 1; si < checkN; si++) {
           const seg = s.path[si]; if(!seg) continue;
@@ -3700,13 +3713,13 @@ class Snake {
         this.boosting = dangerDist < 150;
         // Piège humain : si proie dans la direction de fuite, on coupe sa route
         if(preyTarget && preyDist < 200){
-          const preyAngle = preyTarget.head.sub(this.head).angle();
+          const preyAngle = Math.atan2(preyTarget.head.y-hy, preyTarget.head.x-hx); // #5 FIX
           let pa = Math.abs(preyAngle - desiredAngle);
           while(pa>Math.PI)pa=Math.abs(pa-Math.PI*2);
-          if(pa < 0.6) desiredAngle = preyAngle; // opportuniste !
+          if(pa < 0.6) desiredAngle = Math.atan2(preyTarget.head.y-hy, preyTarget.head.x-hx); // #5 FIX: zéro alloc
         }
         // Mange sur le chemin
-        if(foodTarget && bestFoodDist < 80) desiredAngle = foodTarget.sub(this.head).angle();
+        if(foodTarget && bestFoodDist < 80) desiredAngle = Math.atan2(foodTarget.y-hy, foodTarget.x-hx); // #5 FIX
       }
 
     } else if(hasPrey) {
@@ -3725,25 +3738,25 @@ class Snake {
           const interY = leader.head.y + Math.sin(leader.angle)*50;
           desiredAngle = preyDist < 200
             ? Math.atan2(interY-hy, interX-hx)
-            : leader.head.sub(this.head).angle();
+            : Math.atan2(leader.head.y-hy, leader.head.x-hx); // #5 FIX
         }
       } else if(this.ai_behavior === 'collector' || this.ai_behavior === 'survivor') {
         // Préfèrent manger, attaquent si proie sur le chemin
         if(hasFood && bestFoodDist < 200){
-          desiredAngle = foodTarget.sub(this.head).angle();
+          desiredAngle = Math.atan2(foodTarget.y-hy, foodTarget.x-hx); // #5 FIX
         } else {
-          desiredAngle = preyTarget.head.sub(this.head).angle();
+          desiredAngle = Math.atan2(preyTarget.head.y-hy, preyTarget.head.x-hx); // #5 FIX
         }
       } else {
         // Aggressive : fonce direct, boost en approche
-        desiredAngle = preyTarget.head.sub(this.head).angle();
+        desiredAngle = Math.atan2(preyTarget.head.y-hy, preyTarget.head.x-hx); // #5 FIX
       }
       this.boosting = preyDist < 230;
-      if(foodTarget && bestFoodDist < 55) desiredAngle = foodTarget.sub(this.head).angle();
+      if(foodTarget && bestFoodDist < 55) desiredAngle = Math.atan2(foodTarget.y-hy, foodTarget.x-hx); // #5 FIX
 
     } else if(hasFood) {
       // ── MANGER : va au cluster ou nourriture, léger mouvement naturel ──
-      desiredAngle = foodTarget.sub(this.head).angle();
+      desiredAngle = Math.atan2(foodTarget.y-hy, foodTarget.x-hx); // #5 FIX
       desiredAngle += Math.sin(gs.frame*0.035 + hx*0.001) * 0.055;
       this.boosting = myLen < 40 && bestFoodDist < 140;
 
@@ -4420,6 +4433,7 @@ class Food {
     this.hue = Math.random()*360;
     this.size = 3 + this.value;
     this.pulse = Math.random()*Math.PI*2;
+    this.color = `hsl(${this.hue|0},100%,65%)`; // FIX: couleur pré-calculée pour collectFlash
   }
   update() {} // pulse retiré — calculé à la volée au draw
   draw(ctx, cam) {
@@ -4439,7 +4453,7 @@ class Food {
     // Main
     ctx.beginPath(); ctx.arc(wx, wy, r, 0, Math.PI*2);
     ctx.fillStyle = col;
-    ctx.shadowColor = col; ctx.shadowBlur = 8;
+    if(GLOW_ON) { ctx.shadowColor = col; ctx.shadowBlur = 8; } // FIX: pas de shadow sur mobile
     ctx.fill();
     // Shine
     ctx.beginPath(); ctx.arc(wx-r*0.25, wy-r*0.25, r*0.3, 0, Math.PI*2);
@@ -4570,12 +4584,21 @@ function killSnake(snake, gs, playerKill = false) {
     f.value = 3 + Math.floor(snake.length * 0.1);
     f.size  = 4 + Math.random() * 4;
     f.hue   = Math.random() * 360;
+    f.color = `hsl(${f.hue|0},100%,65%)`; // FIX: cohérent avec Food.reset()
     gs.foods.push(f);
   }
+  // FIX: plafond pour éviter gs.foods de gonfler indéfiniment (mémoire + perf grille spatiale)
+  const _foodCap = FOOD_COUNT * 2;
+  if(gs.foods.length > _foodCap) gs.foods.splice(_foodCap, gs.foods.length - _foodCap);
 
-  // Score multiplier in gold zone
+  // Score multiplier in gold zone — #11 FIX: dist inline, zéro Vec2 alloué
   if(playerKill && gs.player) {
-    const inGold = ZONES.find(z=>z.effect==='coins' && gs.player.head.dist(new Vec2(z.x,z.y))<z.r);
+    const _phx = gs.player.head.x, _phy = gs.player.head.y;
+    const inGold = ZONES.find(z => {
+      if(z.effect !== 'coins') return false;
+      const _zdx = _phx-z.x, _zdy = _phy-z.y;
+      return _zdx*_zdx + _zdy*_zdy < z.r*z.r;
+    });
     if(inGold) { gs.player.score += Math.floor(snake.length); }
   }
 
@@ -4723,6 +4746,7 @@ function resetAllGameState() {
   collectFlashes.length = 0;
   deathExplosions.length = 0;
   shakeIntensity      = 0;
+  _scorePopupCount    = 0; // FIX: évite un compteur bloqué entre parties
   lastTime            = 0;
 
   // Météo — reset au clair
@@ -4746,6 +4770,27 @@ function resetAllGameState() {
 
 // ── GAME INIT ──
 let _saveTimer = null; // timer de sauvegarde différée
+// #6 FIX: refs DOM cachées — zéro getElementById dans les hot paths (updateHUD, updateSkillUI, drawBattleRoyaleZone)
+const _dom = {};
+function _cacheHUDRefs() {
+  _dom.hLen        = document.getElementById('hLen');
+  _dom.energyBar   = document.getElementById('energyBar');
+  _dom.hKills      = document.getElementById('hKills');
+  _dom.hRank       = document.getElementById('hRank');
+  _dom.skillCd0    = document.getElementById('skillCd0');
+  _dom.skillCd1    = document.getElementById('skillCd1');
+  _dom.skillCd2    = document.getElementById('skillCd2');
+  _dom.skillBtn0   = document.getElementById('skillBtn0');
+  _dom.skillBtn1   = document.getElementById('skillBtn1');
+  _dom.skillBtn2   = document.getElementById('skillBtn2');
+  _dom.brChronoHUD = document.getElementById('brChronoHUD');
+  _dom.brChronoTime= document.getElementById('brChronoTime');
+  _dom.brChronoAlive=document.getElementById('brChronoAlive');
+  _dom.brInfo      = document.getElementById('brInfo');
+  _dom.lbExtra     = document.getElementById('lbExtra');  // Fix B
+  _dom.notif       = document.getElementById('notif');    // Fix F
+  _dom.gameScreen  = document.getElementById('gameScreen'); // Fix G
+}
 const SHOP_ITEMS = []; // pas de boutique dans cette version
 function startGame(mode='battleroyale', realPlayerCount=0) {
   // ── Consommer les boosts achetés (1 partie) ──
@@ -4777,6 +4822,7 @@ function startGame(mode='battleroyale', realPlayerCount=0) {
   _gameStartProtect = true;
   setTimeout(() => { _gameStartProtect = false; }, 10000); // protection 10s contre redirections accidentelles
   showScreen('gameScreen');
+  _cacheHUDRefs(); // #6 FIX: cache tous les refs DOM HUD une seule fois
 
   canvas.width = window.innerWidth;
   // Safe area iOS : env(safe-area-inset-bottom) via CSS var --sab, fallback 0
@@ -5108,12 +5154,12 @@ function gameLoop(timestamp = 0) {
   }
 
   // ── MÉTÉO ──
-  updateWeather(gs);
+  updateWeather(gs, dt); // #2 FIX: dt-aware
 
   // ── BATTLE ROYALE ──
   // Init BR au frame 1 — AVANT le premier updateBattleRoyale
   if(gs.frame === 1 && lobbyPendingMode === 'battleroyale') initBattleRoyale(gs);
-  if(brActive) updateBattleRoyale(gs);
+  if(brActive) updateBattleRoyale(gs, dt); // Fix C: dt-aware
 
   // ── LAST SEEN toutes les 5min ──
 
@@ -5159,7 +5205,7 @@ function gameLoop(timestamp = 0) {
     });
     if(!inSpeed && !currentZoneLabel?.includes('DANGER')) p.zoneSpeed = 1;
     // Mettre à jour le label brInfo dynamiquement
-    const brInfoEl = document.getElementById('brInfo');
+    const brInfoEl = _dom.brInfo; // #6 FIX: cached ref
     if(brInfoEl) {
       if(currentZoneLabel) {
         brInfoEl.textContent = currentZoneLabel;
@@ -5189,7 +5235,7 @@ function gameLoop(timestamp = 0) {
   }
 
   // ── BOSS SPAWN : apparition aléatoire n'importe où sur la map ──
-  gs.bossSpawnTimer--;
+  gs.bossSpawnTimer -= dt; // Fix C: dt-aware (était -- = frame-dépendant)
   if(gs.bossSpawnTimer <= 0 && !bossAlive) {
     // Respawn 20-30s après mort quelle que soit le mode
     gs.bossSpawnTimer = (1200 + Math.random() * 600) | 0; // 20-30s à 60fps
@@ -5612,12 +5658,12 @@ function gameLoop(timestamp = 0) {
   // HUD update
   updateHUD(gs);
 
-  // Active bonus timers
-  activeBonuses = activeBonuses.filter(b => {
-    b.timer -= dt/60;
-    if(b.timer <= 0) { b.el.remove(); return false; }
-    return true;
-  });
+  // Active bonus timers — #7 FIX: reverse splice, zéro alloc (filter() créait un array neuf chaque frame)
+  for(let _bi = activeBonuses.length-1; _bi >= 0; _bi--) {
+    const _b = activeBonuses[_bi];
+    _b.timer -= dt/60;
+    if(_b.timer <= 0) { _b.el.remove(); activeBonuses.splice(_bi, 1); }
+  }
 
   // Skill cooldowns
   if(p) updateSkillUI(p, dt);
@@ -6055,11 +6101,12 @@ function applyPowerup(snake, type, gs) {
   }
 }
 
+// FIX: compteur JS — évite un querySelectorAll à chaque nourriture mangée (magnet = des dizaines/s)
+let _scorePopupCount = 0;
+
 function spawnScorePopup(text, worldPos) {
   if(!worldPos || !gameState || !gameState.player) return;
-  // Limiter les popups simultanés (évite les mutations DOM excessives pendant le magnet)
-  const existing = document.getElementById('gameScreen')?.querySelectorAll('.score-popup');
-  if(existing && existing.length >= 12) return;
+  if(_scorePopupCount >= 12) return; // limite sans requête DOM
   const cam = gameState.lastCam || gameState.player.head;
   const sx = worldPos.x - cam.x + canvas.width/2;
   const sy = worldPos.y - cam.y + canvas.height/2;
@@ -6070,52 +6117,75 @@ function spawnScorePopup(text, worldPos) {
   el.style.top = sy + 'px';
   el.style.color = `hsl(${Math.random()*60+40},100%,60%)`;
   el.style.fontSize = `${14 + Math.random()*10}px`;
-  document.getElementById('gameScreen').appendChild(el);
-  setTimeout(() => el.remove(), 1000);
+  const _gsEl = _dom.gameScreen || document.getElementById('gameScreen'); // Fix G: cached
+  _gsEl.appendChild(el);
+  _scorePopupCount++;
+  setTimeout(() => { el.remove(); _scorePopupCount--; }, 1000);
 }
 
 function updateHUD(gs) {
   const p = gs.player;
-  const lenEl = document.getElementById('hLen');
-  if(lenEl) lenEl.textContent = p.score.toLocaleString();
-  const eBar = document.getElementById('energyBar');
+  // #6 FIX: _dom cache — zéro getElementById ici
+  const lenEl = _dom.hLen;
+  if(lenEl) lenEl.textContent = gs.frame % 10 === 0 ? p.score.toLocaleString() : (lenEl.textContent); // #8 FIX: throttle Intl 10f
+  const eBar = _dom.energyBar;
   if(eBar) eBar.style.width = p.energy + '%';
-  const hKillsEl = document.getElementById('hKills');
+  const hKillsEl = _dom.hKills;
   if(hKillsEl) hKillsEl.textContent = p.kills;
 
-  // Rang
-  const sorted = gs.snakes.filter(s => s.alive && !s.isPlayer && !s.isBoss);
-  const rank = sorted.filter(s => s.score > p.score).length + 1;
-  const rankEl = document.getElementById('hRank');
-  if(rankEl) rankEl.textContent = '#'+rank;
+  // Rang — throttlé toutes les 30 frames (évite calculs sur 99 bots à 60fps)
+  if(gs.frame % 30 === 0) {
+    // Fix H: boucle unique O(n), zéro alloc (était 2 filter() = 2 arrays)
+    let rank = 1;
+    const pScore = p.score;
+    for(let _ri = 0; _ri < gs.snakes.length; _ri++) {
+      const _s = gs.snakes[_ri];
+      if(_s.alive && !_s.isPlayer && !_s.isBoss && _s.score > pScore) rank++;
+    }
+    const rankEl = _dom.hRank;
+    if(rankEl) rankEl.textContent = '#'+rank;
+  }
 
   if(gs.frame % 60 === 0) updateLeaderboard(gs);
 }
 
 function updateLeaderboard(gs) {
-  const lbRows = document.getElementById('lbRows');
+  const lbRows  = document.getElementById('lbRows');
+  const lbExtra = _dom.lbExtra;
   if(!lbRows) return;
-  const top = gs.snakes
+  const all = gs.snakes
     .filter(s => s.alive && !s.isBoss)
-    .sort((a,b) => b.score - a.score)
-    .slice(0, 5);
-  lbRows.innerHTML = top.map((s, i) => {
+    .sort((a,b) => b.score - a.score);
+  const top5  = all.slice(0, 5);
+  const next5 = all.slice(5, 10);
+  lbRows.innerHTML = top5.map((s, i) => {
     const isMe = s.isPlayer;
     return `<div class="lb-e${isMe?' me':''}">${i+1}. ${esc(s.name)} — ${s.score}</div>`;
   }).join('');
+  // Rangs 6-10 dans lbExtra (visible seulement si toggle ouvert)
+  if(lbExtra) {
+    lbExtra.innerHTML = next5.length
+      ? next5.map((s, i) => {
+          const isMe = s.isPlayer;
+          return `<div class="lb-e${isMe?' me':''}" style="opacity:.6">${i+6}. ${esc(s.name)} — ${s.score}</div>`;
+        }).join('')
+      : '';
+  }
 }
 
 let lbOpen = false;
 function toggleLeaderboard() {
   lbOpen = !lbOpen;
-  document.getElementById('lbHeader').classList.toggle('open', lbOpen);
-  document.getElementById('lbExtra').classList.toggle('open', lbOpen);
+  const hdr = document.getElementById('lbHeader');
+  const ext = document.getElementById('lbExtra');
+  if(hdr) hdr.textContent = (lbOpen ? '▾' : '▸') + ' CLASSEMENT'; // flèche cohérente
+  if(ext) ext.classList.toggle('open', lbOpen);
 }
 
 function updateSkillUI(p, dt) {
   for (let i = 0; i < 3; i++) {
-    const cdEl = document.getElementById('skillCd' + i);
-    const btn  = document.getElementById('skillBtn' + i);
+    const cdEl = _dom['skillCd'+i]; // #6 FIX: cached ref
+    const btn  = _dom['skillBtn'+i];
     if (!cdEl) continue;
     if (buildSkillCDs[i] > 0) {
       buildSkillCDs[i] = Math.max(0, buildSkillCDs[i] - dt/60);
@@ -6582,14 +6652,29 @@ window.addEventListener('DOMContentLoaded',()=>{
 if('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     const swCode = `
-const CACHE = 'snakewars-v2';
-self.addEventListener('install', e => { self.skipWaiting(); });
+const CACHE = 'snakewars-v3';
+// FIX: on met la page principale en cache à l'install pour que l'offline soit réel
+self.addEventListener('install', e => {
+  e.waitUntil(
+    caches.open(CACHE).then(c => c.add('./').catch(()=>{})).then(() => self.skipWaiting())
+  );
+});
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));
   self.clients.claim();
 });
 self.addEventListener('fetch', e => {
-  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+  // Cache-first pour la page principale, network-first pour le reste (Ably, AdSense…)
+  const url = new URL(e.request.url);
+  if(url.pathname.endsWith('.html') || url.pathname === '/' || url.pathname.endsWith('/')) {
+    e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(res => {
+      const clone = res.clone();
+      caches.open(CACHE).then(c => c.put(e.request, clone));
+      return res;
+    })));
+  } else {
+    e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+  }
 });
 `;
     const blob = new Blob([swCode], {type:'text/javascript'});

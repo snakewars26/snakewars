@@ -3433,14 +3433,36 @@ class Snake {
       let bossDesired=this.ai_targetAngle;
       this.boosting=false;
 
+      // ── Boss body avoidance : détecte corps de bots/joueurs sur la trajectoire ──
+      // Si la tête du boss touche un corps → le boss meurt, donc il les évite
+      let bossDangerBody = null, bossDangerBodyDist = 9999;
+      for(const s of gs.snakes) {
+        if(s === this || !s.alive || s.isBoss) continue;
+        const sd = this.head.dist(s.head);
+        if(sd > 400) continue;
+        const checkN = Math.min(s.path.length, 18);
+        for(let si = 1; si < checkN; si++) {
+          const seg = s.path[si]; if(!seg) continue;
+          const sdx = seg.x - hx, sdy = seg.y - hy;
+          const sd2 = sdx*sdx + sdy*sdy;
+          if(sd2 < 170*170) {
+            const aToSeg = Math.atan2(sdy, sdx);
+            let aD = Math.abs(aToSeg - this.angle);
+            while(aD > Math.PI) aD = Math.abs(aD - Math.PI*2);
+            if(aD < 1.2) {
+              const segDist = Math.sqrt(sd2);
+              if(segDist < bossDangerBodyDist) { bossDangerBody = seg; bossDangerBodyDist = segDist; }
+              break;
+            }
+          }
+        }
+      }
+
       if(this.ai_behavior==='aggressive') {
         // 👹 TITAN — Brute pure : fonce sur tout le monde, boost quasi permanent
         if(humanSnake && humanDist<1200) {
           bossDesired=Math.atan2(humanFutPos.y-hy,humanFutPos.x-hx);
           this.boosting=humanDist<800;
-        } else if(nearestBot && nearestBotDist<600 && !brActive) {
-          bossDesired=nearestBot.head.sub(this.head).angle();
-          this.boosting=nearestBotDist<400;
         } else if(bestFood) {
           bossDesired=Math.atan2(bestFood.y-hy,bestFood.x-hx);
         }
@@ -3475,6 +3497,14 @@ class Snake {
       // Mange si nourriture super proche et pas de cible urgente
       if(bestFood&&bestFoodD<100&&humanDist>300&&nearestBotDist>300) {
         bossDesired=Math.atan2(bestFood.y-hy,bestFood.x-hx);
+      }
+
+      // ── Avoidance prioritaire : écarte le boss des corps de bots ──
+      // Un corps de bot sur la trajectoire = mort → priorité sur l'attaque
+      if(bossDangerBody) {
+        const awayAngle = Math.atan2(hy - bossDangerBody.y, hx - bossDangerBody.x);
+        bossDesired = awayAngle + (Math.random() > 0.5 ? 1 : -1) * (0.45 + Math.random() * 0.45);
+        this.boosting = false;
       }
 
       // Wall avoidance progressif
@@ -5374,10 +5404,6 @@ function gameLoop(timestamp = 0) {
         if(!cell) continue;
         for(let _k=0; _k<cell.length; _k+=2) { const victim=cell[_k], ptIdx=cell[_k+1];
           if(!victim.alive || victim === attacker) continue;
-          // ── BOSS IMMUNITÉ : seul un joueur humain peut tuer un boss ──
-          if(victim.isBoss && !attacker.isPlayer && !attacker.isRemotePlayer) continue;
-          // ── BOSS ATTAQUANT : la tête du boss ne se suicide pas sur les corps de bots ──
-          if(attacker.isBoss && !victim.isPlayer && !victim.isRemotePlayer) continue;
           const pt = victim.path[ptIdx];
           if(!pt) continue;
           const hitDist = attacker.size + victim.size * 0.8;
@@ -5405,6 +5431,9 @@ function gameLoop(timestamp = 0) {
                 gs.player.score += Math.floor(attacker.length * 2);
                 addKillMsg(`👑 ${attacker.name} a foncé dans ton corps et est mort ! +${Math.floor(attacker.length*2)} pts`);
                 killSnake(attacker, gs, true);
+              } else {
+                // Boss fonce dans un corps de bot → boss meurt aussi (logique normale)
+                killSnake(attacker, gs, false);
               }
             } else {
               if(victim.isPlayer) {
@@ -5435,9 +5464,6 @@ function gameLoop(timestamp = 0) {
       const sB = gs.snakes[b];
       if(!sB.alive) continue;
       if(sA.head.dist(sB.head) < sA.size + sB.size) {
-        // ── BOSS IMMUNITÉ : bot ne peut pas tuer un boss tête à tête ──
-        if(sA.isBoss && !sB.isPlayer && !sB.isRemotePlayer) continue;
-        if(sB.isBoss && !sA.isPlayer && !sA.isRemotePlayer) continue;
         // ── IMMUNITÉ TOTALE : si l'un des deux a un shield, personne ne meurt ──
         if(sA.shieldActive || sB.shieldActive) continue;
         // ── FANTÔME : joueur intouchable ET ne peut pas tuer ──
@@ -5446,11 +5472,8 @@ function gameLoop(timestamp = 0) {
         }
         // ── FIX 2 : FANTÔME — immunité ghost pour bots/boss aussi ──
         if(sA.wallGhostTimer > 0 || sB.wallGhostTimer > 0) continue;
-        // Boss vs joueur tête-à-tête : basé sur la longueur (joueur peut gagner)
-        let aWins;
-        if(sA.isBoss && !sB.isBoss && !sB.isPlayer && !sB.isRemotePlayer) aWins = true;
-        else if(sB.isBoss && !sA.isBoss && !sA.isPlayer && !sA.isRemotePlayer) aWins = false;
-        else aWins = sA.length >= sB.length;
+        // Boss vs bot tête-à-tête : logique normale — le plus long gagne
+        let aWins = sA.length >= sB.length;
         const loser = aWins ? sB : sA;
         const winner = aWins ? sA : sB;
         if(winner.isPlayer) {

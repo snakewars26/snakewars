@@ -187,7 +187,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
 
 /* ── GAME ── */
 #gameScreen{background:#000;z-index:20;position:fixed;inset:0}
-#gc{position:absolute;inset:0;cursor:crosshair;display:block;touch-action:none}
+#gc{position:absolute;inset:0;cursor:crosshair;display:block;touch-action:none;will-change:transform}
 
 /* HUD */
 .hud{position:absolute;inset:0;pointer-events:none;z-index:30;padding:clamp(5px,1.8vw,10px)}
@@ -1597,6 +1597,13 @@ let ablyClient    = null;
 let ablyChannel   = null;
 let syncInterval  = null;
 let myPlayerId    = null; // ID unique généré à la connexion
+let _ablyLastPub  = 0;   // anti-burst : timestamp dernière publication
+// Pré-allocation payload publish — zéro alloc à chaque envoi (10×/s)
+let _pubHead = null, _pubPath = null, _pubPayload = null;
+// Pool entrant : scratch objects réutilisés à chaque message reçu — zéro alloc/message
+const _inHead  = { x: 0, y: 0 };
+const _inPath  = Array.from({ length: 15 }, () => ({ x: 0, y: 0 }));
+const _RX_ID   = /^[\w\-]+$/; // regex compilée 1× au lieu de chaque message
 
 // remotePlayers : { playerId: { pseudo, skinId, head, path, angle, alive, size, lastUpdate } }
 
@@ -1622,48 +1629,121 @@ function startPositionSync() {
   myPlayerId = generatePlayerId();
 
   try {
-    ablyClient = new Ably.Realtime({ key: ABLY_KEY, useBinaryProtocol: true, closeOnUnload: true });
+    ablyClient = new Ably.Realtime({
+      key: ABLY_KEY,
+      useBinaryProtocol: true,
+      closeOnUnload: true,
+      disconnectedRetryTimeout: 5000,
+      suspendedRetryTimeout: 15000,
+      httpMaxRetryCount: 3
+    });
+    ablyClient.connection.on('connected',    () => console.log('[Ably] connecté'));
+    ablyClient.connection.on('disconnected', () => console.warn('[Ably] déconnecté — retry auto'));
+    ablyClient.connection.on('suspended',    () => console.warn('[Ably] suspendu — retry dans 15s'));
+    ablyClient.connection.on('failed',       () => console.error('[Ably] échec permanent'));
     ablyChannel = ablyClient.channels.get(ROOM_ID);
 
     // S'abonner aux positions des autres joueurs
     ablyChannel.subscribe('pos', (msg) => {
       const d = msg.data;
-      if (!d || d.id === myPlayerId) return; // ignorer ses propres messages
+      if (!d || typeof d !== 'object') return;
+      // Valider id : string alphanumérique, max 40 chars
+      if (typeof d.id !== 'string' || d.id.length > 40 || !_RX_ID.test(d.id)) return;
+      if (d.id === myPlayerId) return;
+
+      // Sanitize pseudo
+      const _rawPseudo = typeof d.pseudo === 'string' ? d.pseudo.trim().substring(0, 20) : 'Joueur';
+      const _safePseudo = _rawPseudo.replace(/[<>"'&]/g, '') || 'Joueur';
+
+      // Valider coordonnées head — scratch _inHead, zéro alloc
+      let _headValid = false;
+      if (d.head && typeof d.head === 'object') {
+        const hx = +d.head.x, hy = +d.head.y;
+        if (isFinite(hx) && isFinite(hy) && hx >= 0 && hx <= WORLD && hy >= 0 && hy <= WORLD) {
+          _inHead.x = hx; _inHead.y = hy; _headValid = true;
+        }
+      }
+
+      // Valider path — scratch _inPath, zéro alloc tableau
+      let _inPathLen = 0;
+      if (Array.isArray(d.path)) {
+        const _maxPts = Math.min(d.path.length, 15);
+        for (let _pi = 0; _pi < _maxPts; _pi++) {
+          const pt = d.path[_pi];
+          if (!pt || typeof pt !== 'object') continue;
+          const px = +pt.x, py = +pt.y;
+          if (isFinite(px) && isFinite(py) && px >= 0 && px <= WORLD && py >= 0 && py <= WORLD) {
+            _inPath[_inPathLen].x = px; _inPath[_inPathLen].y = py; _inPathLen++;
+          }
+        }
+      }
+
+      // Valider scalaires
+      const _safeAngle   = isFinite(+d.angle)  ? +d.angle  : 0;
+      const _safeSize    = isFinite(+d.size)    ? Math.max(1, Math.min(200, +d.size)) : 8;
+      const _safeSkinId  = Number.isInteger(d.skinId) ? Math.max(0, Math.min(SKINS.length-1, d.skinId)) : 0;
+      const _safeTime    = isFinite(+d.time)    ? +d.time   : Date.now();
 
       // Initialiser l'entrée si nouvelle
       if (!remotePlayers[d.id]) {
-        remotePlayers[d.id] = { buffer: [], head: null, path: [], angle: 0, alive: true, size: 8 };
+        remotePlayers[d.id] = { buffer: [], head: null, path: [], angle: 0, alive: true, size: 8, renderDelay: 80 };
       }
       const rp = remotePlayers[d.id];
 
-      // Mettre à jour les métadonnées
-      rp.pseudo     = d.pseudo  || 'Joueur';
-      rp.skinId     = d.skinId  || 0;
-      rp.alive      = d.alive   !== false;
-      rp.size       = d.size    || 8;
-      rp.boosting   = d.boosting || false;
+      // Mettre à jour les métadonnées (données validées uniquement)
+      rp.pseudo     = _safePseudo;
+      rp.skinId     = _safeSkinId;
+      rp.alive      = d.alive !== false;
+      rp.size       = _safeSize;
+      rp.boosting   = !!d.boosting;
       rp.lastUpdate = Date.now();
 
       // Mesurer la latence réseau pour le RENDER_DELAY adaptatif
-      if (d.time) {
-        const networkDelay = Date.now() - d.time;
+      if (_safeTime) {
+        const networkDelay = Date.now() - _safeTime;
         rp._delays = rp._delays || [];
         rp._delays.push(networkDelay);
-        if (rp._delays.length > 10) rp._delays.shift();
-        rp.avgJitter = rp._delays.reduce((a, b) => a + b, 0) / rp._delays.length;
+        if (rp._delays.length > 10) { rp._delays[0] = rp._delays[rp._delays.length-1]; rp._delays.pop(); }
+        let _dSum = 0; for(let _di = 0; _di < rp._delays.length; _di++) _dSum += rp._delays[_di];
+        rp.avgJitter = _dSum / rp._delays.length;
+        rp.renderDelay = Math.min(180, Math.max(40, rp.avgJitter * 1.5));
       }
 
-      // Stocker la vitesse estimée pour l'extrapolation
-      rp.lastSpeed = d.boosting ? 4.2 : 2.1;
-      rp.lastAngle = d.angle || 0;
+      // Stocker la vitesse + cos/sin cachés (évite Math.cos/sin à chaque frame d'extrapolation)
+      rp.lastSpeed = rp.boosting ? 4.2 : 2.1;
+      if (rp.lastAngle !== _safeAngle) {
+        rp.lastAngle = _safeAngle;
+        rp._cosAngle = Math.cos(_safeAngle);
+        rp._sinAngle = Math.sin(_safeAngle);
+      }
 
-      // Premier snapshot : init directe pour éviter le freeze
-      if (!rp.head && d.head) { rp.head = d.head; rp.path = d.path || []; rp.angle = d.angle || 0; }
+      if (_headValid) {
+        // Construire un path stable (copie depuis _inPath scratch)
+        const _snapPath = [];
+        for (let _si = 0; _si < _inPathLen; _si++) {
+          _snapPath.push({ x: _inPath[_si].x, y: _inPath[_si].y });
+        }
 
-      // Ajouter snapshot horodaté dans le buffer (max 10 entrées)
-      if (d.head) {
-        rp.buffer.push({ head: d.head, path: d.path || [], angle: d.angle || 0, time: d.time || Date.now() });
-        if (rp.buffer.length > 10) rp.buffer.shift();
+        // Premier snapshot : init directe pour éviter le freeze
+        if (!rp.head) {
+          rp.head = { x: _inHead.x, y: _inHead.y };
+          rp.path = _snapPath; rp.angle = _safeAngle;
+        }
+
+        // Ajouter snapshot dans le buffer — réutiliser le slot déplacé si buffer plein
+        let _snap;
+        if (rp.buffer.length >= 10) {
+          _snap = rp.buffer[0];
+          rp.buffer[0] = rp.buffer[rp.buffer.length - 1];
+          rp.buffer.pop();
+        }
+        if (_snap) {
+          _snap.head.x = _inHead.x; _snap.head.y = _inHead.y;
+          _snap.path = _snapPath; _snap.angle = _safeAngle; _snap.time = _safeTime;
+          rp.buffer.push(_snap);
+        } else {
+          rp.buffer.push({ head: { x: _inHead.x, y: _inHead.y }, path: _snapPath, angle: _safeAngle, time: _safeTime });
+        }
       }
     });
 
@@ -1675,34 +1755,18 @@ function startPositionSync() {
       }
     });
 
-    // Publier sa position toutes les 80ms (données compressées + horodatées)
-    syncInterval = setInterval(() => {
-      const p = gameState?.player;
-      if (!p || !p.alive || !ablyChannel) return;
-      if (ablyClient?.connection?.state !== 'connected') return; // évite les erreurs 90003
-
-      // Opt 7: boucle directe — zéro alloc (filter+slice+map créait 3 arrays × 10msg/s)
-      const pathSample = [];
-      if(p.path) {
-        for(let _pi = 0; _pi < p.path.length && pathSample.length < 12; _pi += 4) {
-          const pt = p.path[_pi];
-          if(pt) pathSample.push({ x: ~~pt.x, y: ~~pt.y });
-        }
-      }
-
-      ablyChannel.publish('pos', {
-        id:       myPlayerId,
-        pseudo:   currentUser?.pseudo || sd?.pseudo || 'Joueur',
-        skinId:   sd?.equippedSkin ?? 0,
-        head:     p.head ? { x: ~~p.head.x, y: ~~p.head.y } : null,
-        path:     pathSample,
-        angle:    +( p.angle || 0).toFixed(2),
-        alive:    p.alive,
-        size:     ~~(p.size || 8),
-        boosting: p.boosting || false,
-        time:     Date.now()          // ← horodatage pour l'interpolation
-      });
-    }, 100); // 100ms = 10 msg/s — bon équilibre fluidité/quota Ably
+    // Pré-allouer le payload + le buffer path : zéro alloc à chaque publish
+    // Les 12 slots path sont réutilisés, seule _pubPathLen varie
+    _pubHead    = { x: 0, y: 0 };
+    _pubPath    = Array.from({ length: 12 }, () => ({ x: 0, y: 0 }));
+    _pubPayload = {
+      id: myPlayerId, pseudo: '', skinId: 0,
+      head: _pubHead, path: _pubPath,
+      angle: 0, alive: true, size: 8, boosting: false, time: 0
+    };
+    // Publier depuis publishSync() appelé dans le gameLoop — évite le setInterval
+    // qui désynchronise le tick réseau du rendu et cause des micro-freezes
+    syncInterval = true; // flag : sync active
 
     console.log('[SnakeWars] Ably connecté — salle:', ROOM_ID);
 
@@ -1713,7 +1777,8 @@ function startPositionSync() {
 
 // ── Déconnexion propre ──
 function stopPositionSync() {
-  if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
+  if (syncInterval) { if (typeof syncInterval === 'number') clearInterval(syncInterval); syncInterval = null; }
+  _pubHead = null; _pubPath = null; _pubPayload = null;
 
   if (ablyChannel && myPlayerId) {
     try {
@@ -1734,6 +1799,45 @@ function stopPositionSync() {
 function stopMultiplayerChat(){}
 
 // ── Interpoler et nettoyer les joueurs distants ──
+// ── publishSync : appelé depuis le gameLoop (~60fps), throttle à 100ms interne ──
+// Zéro setInterval — tick réseau aligné sur le rendu, élimine les micro-freezes de désynchronisation
+function publishSync() {
+  if (!syncInterval || !ablyChannel || !_pubPayload) return;
+  if (ablyClient?.connection?.state !== 'connected') return;
+  const _now = Date.now();
+  if (_now - _ablyLastPub < 100) return; // 10 msg/s max
+  _ablyLastPub = _now;
+
+  const p = gameState?.player;
+  if (!p || !p.alive) return;
+
+  // Remplir le buffer path pré-alloué (mutation, zéro alloc)
+  let _plen = 0;
+  if (p.path) {
+    for (let _pi = 0; _pi < p.path.length && _plen < 12; _pi += 4) {
+      const pt = p.path[_pi];
+      if (pt) { _pubPath[_plen].x = ~~pt.x; _pubPath[_plen].y = ~~pt.y; _plen++; }
+    }
+  }
+  _pubPayload.path = _pubPath;
+  _pubPath.length  = _plen; // tronquer sans alloc — Ably sérialise avant de retourner
+
+  // Mettre à jour les champs du payload pré-alloué
+  if (p.head) { _pubHead.x = ~~p.head.x; _pubHead.y = ~~p.head.y; }
+  _pubPayload.id       = myPlayerId;
+  _pubPayload.pseudo   = currentUser?.pseudo || sd?.pseudo || 'Joueur';
+  _pubPayload.skinId   = sd?.equippedSkin ?? 0;
+  _pubPayload.head     = p.head ? _pubHead : null;
+  _pubPayload.angle    = Math.round((p.angle || 0) * 100) / 100; // pas de toFixed → pas de string
+  _pubPayload.alive    = p.alive;
+  _pubPayload.size     = ~~(p.size || 8);
+  _pubPayload.boosting = p.boosting || false;
+  _pubPayload.time     = _now; // réutilise _now — pas de 2e Date.now()
+
+  ablyChannel.publish('pos', _pubPayload);
+  _pubPath.length = 12; // restaurer après serialisation synchrone
+}
+
 function interpolateRemotePlayers() {
   const now = Date.now();
 
@@ -1743,8 +1847,8 @@ function interpolateRemotePlayers() {
     // Supprimer les joueurs inactifs depuis plus de 3 secondes
     if (now - rp.lastUpdate > 3000) { delete remotePlayers[id]; continue; }
 
-    // RENDER_DELAY adaptatif : 1.5× le jitter mesuré, entre 40ms et 180ms
-    const RENDER_DELAY = Math.min(180, Math.max(40, (rp.avgJitter || 80) * 1.5));
+    // RENDER_DELAY caché sur rp — mis à jour seulement quand avgJitter change (à la réception)
+    const RENDER_DELAY = rp.renderDelay || 80;
 
     const buf = rp.buffer;
 
@@ -1753,10 +1857,11 @@ function interpolateRemotePlayers() {
     if (buf.length < 2) {
       if (rp.head && rp.lastAngle !== undefined && rp.lastSpeed && !rp._extrapolated) {
         const dt = Math.min((now - rp.lastUpdate) / 1000, 0.25); // cap 250ms
-        rp.head = {
-          x: rp.head.x + Math.cos(rp.lastAngle) * rp.lastSpeed * dt * 60,
-          y: rp.head.y + Math.sin(rp.lastAngle) * rp.lastSpeed * dt * 60
-        };
+        // Extrapolation — cos/sin cachés sur rp à la réception (pas de trig par frame)
+        const _cos = rp._cosAngle !== undefined ? rp._cosAngle : Math.cos(rp.lastAngle);
+        const _sin = rp._sinAngle !== undefined ? rp._sinAngle : Math.sin(rp.lastAngle);
+        rp.head.x += _cos * rp.lastSpeed * dt * 60;
+        rp.head.y += _sin * rp.lastSpeed * dt * 60;
         rp._extrapolated = true; // bloquer jusqu'au prochain snapshot
       }
       continue;
@@ -1777,11 +1882,10 @@ function interpolateRemotePlayers() {
     const span = p1.time - p0.time;
     const t    = span > 0 ? Math.max(0, Math.min(1, (renderTime - p0.time) / span)) : 1;
 
-    // Interpoler la tête
-    rp.head = {
-      x: p0.head.x + (p1.head.x - p0.head.x) * t,
-      y: p0.head.y + (p1.head.y - p0.head.y) * t
-    };
+    // Interpoler la tête — mutation directe, zéro {x,y} alloué
+    if (!rp.head) rp.head = { x: p0.head.x, y: p0.head.y };
+    rp.head.x = p0.head.x + (p1.head.x - p0.head.x) * t;
+    rp.head.y = p0.head.y + (p1.head.y - p0.head.y) * t;
 
     // Interpoler l'angle (sinus/cosinus pour éviter le flip ±π)
     const a0 = p0.angle, a1 = p1.angle;
@@ -2834,13 +2938,17 @@ function updateBattleRoyale(gs, dt=1) { // Fix C: dt-aware
     }
   });
 
-  // Compte serpents vivants (boss exclus — ce sont des NPC, pas des joueurs)
-  const alive = gs.snakes.filter(s=>s.alive && !s.isBoss);
-  brAlive = alive.length;
+  // Compte serpents vivants (boss exclus) — boucle O(n) sans alloc (filter créait un array neuf chaque frame)
+  let _brAliveCount = 0, _brWinner = null;
+  for(let _bi = 0; _bi < gs.snakes.length; _bi++) {
+    const _bs = gs.snakes[_bi];
+    if(_bs.alive && !_bs.isBoss) { _brAliveCount++; _brWinner = _bs; }
+  }
+  brAlive = _brAliveCount;
 
   // Victoire : dernier vivant
   if(brAlive === 1) {
-    const winner = alive[0];
+    const winner = _brWinner;
     brActive = false;
     document.getElementById('brChronoHUD')?.classList.remove('active');
     if(winner.isPlayer) {
@@ -3157,15 +3265,19 @@ function spawnParticles(x, y, color, count=12, speed=3) {
   for(let i=0;i<count;i++) {
     const a = (Math.PI*2/count)*i + Math.random()*0.3;
     const spd = speed * (0.5+Math.random());
+    // trail circulaire : tableau fixe 6 slots + index tête
+    const tr = [{x,y},{x,y},{x,y},{x,y},{x,y},{x,y}];
     particles.push({ x, y, vx:Math.cos(a)*spd, vy:Math.sin(a)*spd,
-      life:1, maxLife:1, color, size:3+Math.random()*4, trail:[] });
+      life:1, maxLife:1, color, size:3+Math.random()*4, trail:tr, _ti:0 });
   }
 }
 function updateParticles() {
   for(let i=particles.length-1;i>=0;i--) {
     const p = particles[i];
-    p.trail.push({x:p.x,y:p.y});
-    if(p.trail.length>6) p.trail.shift();
+    // buffer circulaire : écrase le slot suivant, zéro push/shift/alloc
+    p._ti = (p._ti + 1) % 6;
+    p.trail[p._ti].x = p.x;
+    p.trail[p._ti].y = p.y;
     p.x+=p.vx; p.y+=p.vy;
     p.vx*=0.92; p.vy*=0.92;
     p.life-=0.025;
@@ -3173,18 +3285,23 @@ function updateParticles() {
   }
 }
 function drawParticles(ctx, cam) {
+  // Cache canvas.width/2 et canvas.height/2 — évite 2 divisions par particule × N trail pts
+  const _cw2 = canvas.width * 0.5;
+  const _ch2 = canvas.height * 0.5;
   particles.forEach(p => {
-    const wx = p.x - cam.x + canvas.width/2;
-    const wy = p.y - cam.y + canvas.height/2;
+    const wx = p.x - cam.x + _cw2;
+    const wy = p.y - cam.y + _ch2;
     if(wx<-50||wx>canvas.width+50||wy<-50||wy>canvas.height+50) return;
     ctx.globalAlpha = p.life;
-    // Trail
-    if(p.trail.length>1) {
-      ctx.beginPath();
-      ctx.moveTo(p.trail[0].x-cam.x+canvas.width/2, p.trail[0].y-cam.y+canvas.height/2);
-      p.trail.forEach(t=>ctx.lineTo(t.x-cam.x+canvas.width/2,t.y-cam.y+canvas.height/2));
-      ctx.strokeStyle=p.color; ctx.lineWidth=1; ctx.stroke();
+    // Trail — lecture dans l'ordre chronologique depuis le buffer circulaire
+    ctx.beginPath();
+    const _tr = p.trail;
+    ctx.moveTo(_tr[p._ti].x - cam.x + _cw2, _tr[p._ti].y - cam.y + _ch2);
+    for(let _j = 1; _j < 6; _j++) {
+      const _t = _tr[(p._ti + _j) % 6];
+      ctx.lineTo(_t.x - cam.x + _cw2, _t.y - cam.y + _ch2);
     }
+    ctx.strokeStyle=p.color; ctx.lineWidth=1; ctx.stroke();
     ctx.beginPath();
     ctx.arc(wx, wy, p.size*p.life, 0, Math.PI*2);
     ctx.fillStyle = p.color;
@@ -3242,6 +3359,13 @@ class Vec2 {
 const DRAW_SPACING = 2;    // dessin dense = zéro pointillé
 const COL_SPACING  = 12;   // 1 check collision tous les 12 points
 const MAX_DRAW_SEGS = 200; // Max cercles dessinés à l'écran (perf constante)
+
+// ── bodyWidth top-level — évite ~6000 closures/s (1 par serpent×frame) ──
+let _bodyWidthSz = 8;
+function _bodyWidthFn(t) {
+  const taper = Math.pow(1 - t, 0.45);
+  return Math.max(_bodyWidthSz * 2 * taper, 1.0);
+}
 
 class Snake {
   constructor(x, y, skin, name, isPlayer) {
@@ -3307,7 +3431,8 @@ class Snake {
   update(gs, dt=1) {
     if(!this.alive) return;
     if(this.isRemotePlayer) return;
-    const regenVal = hasStat('regen');
+    // hasStat() résultat injecté par gameLoop 1×/frame — évite 99 lectures de sd.equippedBoosts/frame
+    const regenVal = (typeof _frameHasRegen !== 'undefined') ? _frameHasRegen : hasStat('regen');
     if(regenVal && this.energy < 100) {
       this.energy = Math.min(100, this.energy + 0.05);
     }
@@ -3321,7 +3446,10 @@ class Snake {
     if(this.overloadTimer > 0) this.overloadTimer -= dtSec;
     if(this.virusTimer    > 0) this.virusTimer    -= dtSec;
     if(this.wallGhostTimer> 0) this.wallGhostTimer -= dtSec;
-    Object.keys(this.skillCDs).forEach(k => { if(this.skillCDs[k] > 0) this.skillCDs[k] -= dtSec; });
+    const _cds = this.skillCDs;
+    if(_cds.shield > 0) _cds.shield -= dtSec;
+    if(_cds.magnet > 0) _cds.magnet -= dtSec;
+    if(_cds.bomb   > 0) _cds.bomb   -= dtSec;
 
     // Boost
     let spd = this.speed * (this.zoneSpeed || 1);
@@ -3345,26 +3473,24 @@ class Snake {
     }
 
     // Déplacer la tête — dt compense les variations de framerate
-    // #4 FIX: inline sans allocation Vec2 (économise ~200 allocs/frame)
-    const _moveSpd = spd * dt;
-    const _dx = Math.cos(this.angle) * _moveSpd;
-    const _dy = Math.sin(this.angle) * _moveSpd;
+    // #4 FIX: mutation directe de path[0] — zéro Vec2 alloué (économise ~100 allocs/frame)
     const _head0 = this.path[0];
-    const newHead = new Vec2(_head0.x + _dx, _head0.y + _dy);
+    const _newX = _head0.x + Math.cos(this.angle) * spd * dt;
+    const _newY = _head0.y + Math.sin(this.angle) * spd * dt;
 
-    const ghost = hasStat('wallGhost') || this.wallGhostTimer > 0;
+    const ghost = (typeof _frameHasWallGhost !== 'undefined' ? _frameHasWallGhost : hasStat('wallGhost')) || this.wallGhostTimer > 0;
+    let _resolvedX = _newX, _resolvedY = _newY;
     if(ghost) {
-      newHead.x = ((newHead.x % WORLD) + WORLD) % WORLD;
-      newHead.y = ((newHead.y % WORLD) + WORLD) % WORLD;
+      _resolvedX = ((_newX % WORLD) + WORLD) % WORLD;
+      _resolvedY = ((_newY % WORLD) + WORLD) % WORLD;
     } else {
       const wallMargin = this.size + 2;
       const wallClamp  = wallMargin + 4;
-      const ox = this.path[0].x, oy = this.path[0].y;
-      const nx = newHead.x,      ny = newHead.y;
-      const hitWall = Math.min(ox,nx) < wallMargin        ||
-                      Math.max(ox,nx) > WORLD - wallMargin ||
-                      Math.min(oy,ny) < wallMargin        ||
-                      Math.max(oy,ny) > WORLD - wallMargin;
+      const ox = _head0.x, oy = _head0.y;
+      const hitWall = Math.min(ox,_newX) < wallMargin        ||
+                      Math.max(ox,_newX) > WORLD - wallMargin ||
+                      Math.min(oy,_newY) < wallMargin        ||
+                      Math.max(oy,_newY) > WORLD - wallMargin;
       if (hitWall) {
         if (this.isPlayer) {
           if (!this.shieldActive) {
@@ -3373,20 +3499,19 @@ class Snake {
             return;
           } else {
             this.angle += Math.PI;
-            newHead.x = Math.max(wallClamp, Math.min(WORLD - wallClamp, newHead.x));
-            newHead.y = Math.max(wallClamp, Math.min(WORLD - wallClamp, newHead.y));
+            _resolvedX = Math.max(wallClamp, Math.min(WORLD - wallClamp, _newX));
+            _resolvedY = Math.max(wallClamp, Math.min(WORLD - wallClamp, _newY));
           }
         } else {
-          newHead.x = Math.max(wallClamp, Math.min(WORLD - wallClamp, newHead.x));
-          newHead.y = Math.max(wallClamp, Math.min(WORLD - wallClamp, newHead.y));
+          _resolvedX = Math.max(wallClamp, Math.min(WORLD - wallClamp, _newX));
+          _resolvedY = Math.max(wallClamp, Math.min(WORLD - wallClamp, _newY));
         }
       }
     }
+    _head0.x = _resolvedX;
+    _head0.y = _resolvedY;
 
-    // ── SEGMENTS FIXES avec interpolation lerp + dist² (sans sqrt) ══
-    this.path[0].x = newHead.x;
-    this.path[0].y = newHead.y;
-    // Suppression points trop proches (économise mémoire)
+    // ── SEGMENTS FIXES avec interpolation lerp + dist² (sans sqrt) ──
     if(this.path.length > 2) {
       const _p0 = this.path[0], _p1 = this.path[1];
       const _pdx = _p0.x - _p1.x, _pdy = _p0.y - _p1.y;
@@ -3557,10 +3682,15 @@ class Snake {
     // ════ IA ADAPTATIVE ════
     // Recalcule toutes les ~2s (120 frames) selon la taille relative au reste de la partie
     if(gs.frame % 120 === this.ai_timer % 120) {
-      const aliveSnakes = gs.snakes.filter(s => s.alive && !s.isBoss);
-      if(aliveSnakes.length > 1) {
-        if(!this._baseBehavior) this._baseBehavior = this.ai_behavior; // mémorise le style de base
-        const avgLen = aliveSnakes.reduce((sum, s) => sum + s.length, 0) / aliveSnakes.length;
+      // for loop unique — zéro alloc (filter+reduce créait 2 arrays temporaires)
+      let _aliveCount = 0, _aliveLen = 0;
+      for(let _si = 0; _si < gs.snakes.length; _si++) {
+        const _ss = gs.snakes[_si];
+        if(_ss.alive && !_ss.isBoss) { _aliveCount++; _aliveLen += _ss.length; }
+      }
+      if(_aliveCount > 1) {
+        if(!this._baseBehavior) this._baseBehavior = this.ai_behavior;
+        const avgLen = _aliveLen / _aliveCount;
         const ratio = this.length / avgLen;
         if(ratio >= 1.8) {
           this.ai_behavior = 'aggressive';       // dominant → chasse tout
@@ -3823,13 +3953,9 @@ class Snake {
     ctx.lineJoin = 'round';
     ctx.shadowBlur = 0;
 
-    // Helper : largeur du corps à position t (0=tête, 1=queue)
-    // Formule slither.io : plein au centre, s'effile vraiment à la queue
-    function bodyWidth(t) {
-      // Queue vraiment pointue : puissance 3 pour effilage accentué
-      const taper = Math.pow(1 - t, 0.45); // effilage progressif vers la pointe
-      return Math.max(sz * 2 * taper, 1.0);
-    }
+    // bodyWidth : top-level fn, _bodyWidthSz injecté pour cette frame
+    _bodyWidthSz = sz;
+    const bodyWidth = _bodyWidthFn;
 
     // ── PASSE 0 : ombre portée ──
     {
@@ -4439,31 +4565,32 @@ class Food {
     this.hue = Math.random()*360;
     this.size = 3 + this.value;
     this.pulse = Math.random()*Math.PI*2;
-    this.color = `hsl(${this.hue|0},100%,65%)`; // FIX: couleur pré-calculée pour collectFlash
+    this.color    = `hsl(${this.hue|0},100%,65%)`; // pré-calculé pour collectFlash
+    this.innerCol = `hsl(${this.hue|0},100%,85%)`; // pré-calculé (évite alloc/frame)
+    this.glowCol  = `hsla(${this.hue|0},100%,30%,0.3)`; // pré-calculé (évite replace/frame)
   }
   update() {} // pulse retiré — calculé à la volée au draw
-  draw(ctx, cam) {
+  draw(ctx, cam, nowMs) {
     const wx = this.pos.x - cam.x + canvas.width/2;
     const wy = this.pos.y - cam.y + canvas.height/2;
     if(wx < -20 || wx > canvas.width+20 || wy < -20 || wy > canvas.height+20) return;
-    // Pulse via Date.now — pas de mise à jour par frame
-    const r = this.size + Math.sin(Date.now()*0.003 + this.pulse)*1.0;
-    const col = `hsl(${this.hue},100%,65%)`;
-    const innerCol = `hsl(${this.hue},100%,85%)`;
+    // nowMs passé par gameLoop — 1 seul Date.now()/frame au lieu de ~300
+    if(nowMs === undefined) nowMs = Date.now();
+    const r = this.size + Math.sin(nowMs*0.003 + this.pulse)*1.0;
     // Outer glow — seulement desktop (trop lourd mobile)
     if(GLOW_ON) {
       ctx.beginPath(); ctx.arc(wx, wy, r+2, 0, Math.PI*2);
-      ctx.fillStyle = col.replace('65%','30%').replace('hsl','hsla').replace(')',',0.3)');
+      ctx.fillStyle = this.glowCol; // pré-calculé dans reset()
       ctx.fill();
     }
     // Main
     ctx.beginPath(); ctx.arc(wx, wy, r, 0, Math.PI*2);
-    ctx.fillStyle = col;
-    if(GLOW_ON) { ctx.shadowColor = col; ctx.shadowBlur = 8; } // FIX: pas de shadow sur mobile
+    ctx.fillStyle = this.color;
+    if(GLOW_ON) { ctx.shadowColor = this.color; ctx.shadowBlur = 8; }
     ctx.fill();
     // Shine
     ctx.beginPath(); ctx.arc(wx-r*0.25, wy-r*0.25, r*0.3, 0, Math.PI*2);
-    ctx.fillStyle = innerCol;
+    ctx.fillStyle = this.innerCol; // pré-calculé dans reset()
     ctx.shadowBlur=0; ctx.fill();
   }
 }
@@ -5049,15 +5176,18 @@ function drawRemotePlayers(ctx, cam) {
   if (!remotePlayers || !cam) return;
   const cw = ctx.canvas.width;
   const ch = ctx.canvas.height;
+  const cw2 = cw * 0.5;
+  const ch2 = ch * 0.5;
+  const camX = cam.x, camY = cam.y;
   for (const id in remotePlayers) {
     const rp = remotePlayers[id];
     if (!rp || !rp.alive || !rp.head) continue;
-    const hx = rp.head.x - cam.x + cw * 0.5;
-    const hy = rp.head.y - cam.y + ch * 0.5;
+    const hx = rp.head.x - camX + cw2;
+    const hy = rp.head.y - camY + ch2;
     if (hx < -100 || hx > cw + 100 || hy < -100 || hy > ch + 100) continue;
     const sz = rp.size || 8;
     const skin = SKINS[rp.skinId] || SKINS[0];
-    const bodyCol = skin?.body?.[0] || '#00d4ff'; // body est un tableau — prendre la 1re couleur
+    const bodyCol = skin?.body?.[0] || '#00d4ff';
     const headCol = skin?.head  || bodyCol;
     ctx.save();
     // Corps
@@ -5069,9 +5199,10 @@ function drawRemotePlayers(ctx, cam) {
       ctx.lineJoin = 'round';
       ctx.globalAlpha = 0.85;
       const first = rp.path[0];
-      ctx.moveTo(first.x - cam.x + cw * 0.5, first.y - cam.y + ch * 0.5);
+      ctx.moveTo(first.x - camX + cw2, first.y - camY + ch2);
       for (let i = 1; i < rp.path.length; i++) {
-        ctx.lineTo(rp.path[i].x - cam.x + cw * 0.5, rp.path[i].y - cam.y + ch * 0.5);
+        const pt = rp.path[i];
+        ctx.lineTo(pt.x - camX + cw2, pt.y - camY + ch2);
       }
       ctx.stroke();
       ctx.globalAlpha = 1;
@@ -5083,8 +5214,9 @@ function drawRemotePlayers(ctx, cam) {
     if(GLOW_ON) { ctx.shadowColor = headCol; ctx.shadowBlur = 10; }
     ctx.fill();
     ctx.shadowBlur = 0;
-    // Pseudo
-    ctx.font = `bold ${Math.max(10, sz + 2)}px Orbitron,monospace`;
+    // Pseudo — font sans template string (concat entier évite l'interpolation)
+    const _fSize = sz + 2 > 10 ? (sz + 2 | 0) : 10;
+    ctx.font = 'bold ' + _fSize + 'px Orbitron,monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillText(rp.pseudo, hx + 1, hy - sz * 1.8 + 1);
@@ -5121,6 +5253,9 @@ function gameLoop(timestamp = 0) {
 
   // ── LOGIQUE ──
   gs.frame++;
+
+  // Sync multijoueur — aligné sur le rendu, zéro setInterval
+  publishSync();
 
   // Interpoler les joueurs distants
   interpolateRemotePlayers();
@@ -5327,6 +5462,10 @@ function gameLoop(timestamp = 0) {
   }
 
   // Update all — bots lointains updatés moins souvent
+  // Fix perf: hasStat() lu 1×/frame ici au lieu de 99×/frame dans update()
+  const _frameHasRegen     = hasStat('regen');
+  const _frameHasWallGhost = hasStat('wallGhost');
+  const _frameHasSpeedBonus= hasStat('speedBonus');
   gs.snakes.forEach(s => {
     if(!s.alive) return;
     if(gs.frozen && !s.isPlayer) return;
@@ -5527,7 +5666,9 @@ function gameLoop(timestamp = 0) {
     for(let b=a+1; b<gs.snakes.length; b++) {
       const sB = gs.snakes[b];
       if(!sB.alive) continue;
-      if(sA.head.dist(sB.head) < sA.size + sB.size) {
+      const _hhR = sA.size + sB.size;
+      const _hhdx = sA.head.x - sB.head.x, _hhdy = sA.head.y - sB.head.y;
+      if(_hhdx*_hhdx + _hhdy*_hhdy < _hhR*_hhR) {
         // ── IMMUNITÉ TOTALE : si l'un des deux a un shield, personne ne meurt ──
         if(sA.shieldActive || sB.shieldActive) continue;
         // ── FANTÔME : joueur intouchable ET ne peut pas tuer ──
@@ -5595,14 +5736,14 @@ function gameLoop(timestamp = 0) {
   ctx.clearRect(-20, -20, canvas.width+40, canvas.height+40);
 
   // Background néon amélioré
-  drawNeonGrid(ctx, renderCam.x, renderCam.y, canvas.width, canvas.height);
+  drawNeonGrid(ctx, renderCam.x, renderCam.y, canvas.width, canvas.height, timestamp);
 
   // Effets de fond (particules flottantes)
   drawBattleRoyaleZone(ctx, renderCam.x, renderCam.y);
-  drawVisualEffects(ctx, renderCam.x, renderCam.y);
+  drawVisualEffects(ctx, renderCam.x, renderCam.y, timestamp);
 
   // Draw zones
-  drawZones(ctx, renderCam);
+  drawZones(ctx, renderCam, timestamp);
 
   // Draw food — seulement celles dans la vue
   const vHalfW = canvas.width * 0.5 + 20;
@@ -5611,14 +5752,14 @@ function gameLoop(timestamp = 0) {
     const fx = f.pos.x - renderCam.x;
     const fy = f.pos.y - renderCam.y;
     if(fx < -vHalfW || fx > vHalfW || fy < -vHalfH || fy > vHalfH) return;
-    f.draw(ctx, renderCam);
+    f.draw(ctx, renderCam, timestamp);
   });
 
   // Draw powerups
   gs.powerups.forEach(pu => pu.draw(ctx, renderCam));
 
   // Trail du joueur
-  if (p && p.alive && gs.frame % 2 === 0) {
+  if (p && p.alive && (IS_MOBILE ? gs.frame % 3 === 0 : gs.frame % 2 === 0)) {
     const headSkin = getSkin(p.skin);
     addTrailParticle(p.head.x, p.head.y, headSkin.head || '#00f5ff');
   }
@@ -5672,7 +5813,7 @@ function gameLoop(timestamp = 0) {
   // Amis en ligne (mini badge)
 
   // Minimap
-  if(!IS_MOBILE || gs.frame % 6 === 0) drawMinimap(mmCtx, gs);
+  if(gs.frame % 2 === 0) drawMinimap(mmCtx, gs); // throttle 30fps — imperceptible
 
   // HUD update
   updateHUD(gs);
@@ -5754,121 +5895,152 @@ const ZONE_DESC = {
   heal:   '+8 ÉNERGIE/3s',
 };
 
-function drawZones(ctx, cam) {
-  // ⚠️ AUCUN skip par frame — on utilise Date.now() pour l'animation, jamais gameState.frame
-  // Cela garantit ZÉRO clignotement sur mobile ET desktop
-  const nowSec = Date.now() / 1000;
+// ══ ZONE OFFSCREEN CACHE — évite 18 createRadialGradient()/frame → ~16/sec ══
+// Chaque zone est rendue sur un OffscreenCanvas local.
+// Re-rendu uniquement quand la valeur "breath" change de >0.02 (seuil invisible à l'œil).
+const _ZONE_PAD = 80;
+const _zoneCache = ZONES.map(z => {
+  const size = Math.ceil((z.r + _ZONE_PAD) * 2);
+  let osc, oscCtx;
+  try {
+    if(typeof OffscreenCanvas !== 'undefined') {
+      osc = new OffscreenCanvas(size, size);
+    } else {
+      osc = document.createElement('canvas');
+      osc.width = osc.height = size;
+    }
+    oscCtx = osc.getContext('2d');
+  } catch(e) { osc = null; oscCtx = null; }
+  return { osc, oscCtx, size, lastBreath: -99 };
+});
+
+// RGB par type zone (partagé avec le renderer offscreen)
+const _ZC_RGB = {
+  speed:  [0,   245, 255],
+  danger: [255, 0,   110],
+  coins:  [255, 215, 0  ],
+  ghost:  [180, 180, 255],
+  xp:     [191, 0,   255],
+  heal:   [57,  255, 20 ],
+};
+
+function _renderZoneOSC(z, zc, breath) {
+  const c = zc.oscCtx; if(!c) return;
+  const size = zc.size;
+  const cx = size / 2;
+  c.clearRect(0, 0, size, size);
+  const col = _ZC_RGB[z.type] || _ZC_RGB.speed;
+  const r = col[0], g = col[1], b = col[2];
+
+  // 1. Fond radial fixe
+  const bgGrad = c.createRadialGradient(cx, cx, 0, cx, cx, z.r);
+  bgGrad.addColorStop(0,    `rgba(${r},${g},${b},0.13)`);
+  bgGrad.addColorStop(0.55, `rgba(${r},${g},${b},0.05)`);
+  bgGrad.addColorStop(1,    `rgba(${r},${g},${b},0)`);
+  c.beginPath(); c.arc(cx, cx, z.r, 0, Math.PI*2);
+  c.fillStyle = bgGrad; c.fill();
+
+  // 2. Aura respirante
+  const auraR = z.r * (0.50 + breath * 0.30);
+  const auraA = 0.07 + breath * 0.16;
+  const aGrad = c.createRadialGradient(cx, cx, auraR*0.15, cx, cx, auraR);
+  aGrad.addColorStop(0,   `rgba(${r},${g},${b},${(auraA*2.2).toFixed(3)})`);
+  aGrad.addColorStop(0.5, `rgba(${r},${g},${b},${auraA.toFixed(3)})`);
+  aGrad.addColorStop(1,   `rgba(${r},${g},${b},0)`);
+  c.beginPath(); c.arc(cx, cx, auraR, 0, Math.PI*2);
+  c.fillStyle = aGrad; c.fill();
+
+  // 3. Anneau extérieur tirets
+  c.beginPath(); c.arc(cx, cx, z.r, 0, Math.PI*2);
+  c.strokeStyle = `rgba(${r},${g},${b},0.42)`;
+  c.lineWidth = 1.5; c.setLineDash([14,9]); c.stroke(); c.setLineDash([]);
+
+  // 4. Badge — halo
+  const badgeR = 44;
+  const haloR = badgeR + 6 + breath * 12;
+  const hGrad = c.createRadialGradient(cx, cx, badgeR-2, cx, cx, haloR);
+  hGrad.addColorStop(0, `rgba(${r},${g},${b},${(0.22+breath*0.22).toFixed(3)})`);
+  hGrad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  c.beginPath(); c.arc(cx, cx, haloR, 0, Math.PI*2);
+  c.fillStyle = hGrad; c.fill();
+
+  // Badge fond
+  c.beginPath(); c.arc(cx, cx, badgeR, 0, Math.PI*2);
+  c.fillStyle = 'rgba(4,4,16,0.90)'; c.fill();
+
+  // Badge contour
+  c.beginPath(); c.arc(cx, cx, badgeR, 0, Math.PI*2);
+  c.strokeStyle = `rgba(${r},${g},${b},${(0.65+breath*0.35).toFixed(3)})`;
+  c.lineWidth = 1.8 + breath * 1.4; c.stroke();
+
+  // Icône + texte
+  const icon = z.label.split(' ')[0];
+  c.font = '22px serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillStyle = `rgba(${r},${g},${b},1)`; c.fillText(icon, cx, cx - 11);
+  c.font = 'bold 9.5px Orbitron, monospace';
+  const zoneName = z.label.replace(icon+' ZONE ','').replace(icon+' ','');
+  c.fillText(zoneName, cx, cx + 7);
+  c.font = '7px Orbitron, monospace';
+  c.fillStyle = 'rgba(255,255,255,0.38)';
+  c.fillText(ZONE_DESC[z.type] || '', cx, cx + 19);
+
+  zc.lastBreath = breath;
+}
+
+function drawZones(ctx, cam, nowMs) {
+  if(nowMs === undefined) nowMs = Date.now();
+  const nowSec = nowMs / 1000;
   // Respiration douce : période 3s, 0→1→0
   const breath = 0.5 + 0.5 * Math.sin(nowSec * (Math.PI * 2 / 3));
 
-  const vhw = canvas.width * 0.5 + 200;
+  const vhw = canvas.width  * 0.5 + 200;
   const vhh = canvas.height * 0.5 + 200;
 
-  // RGB par type (évite les manipulations de chaînes rgba)
-  const ZC = {
-    speed:  [0,   245, 255],
-    danger: [255, 0,   110],
-    coins:  [255, 215, 0  ],
-    ghost:  [180, 180, 255],
-    xp:     [191, 0,   255],
-    heal:   [57,  255, 20 ],
-  };
-
-  ZONES.forEach(z => {
+  ZONES.forEach((z, zi) => {
     const zsx = z.x - cam.x, zsy = z.y - cam.y;
     if(Math.abs(zsx) > vhw + z.r || Math.abs(zsy) > vhh + z.r) return;
-    const wx = z.x - cam.x + canvas.width / 2;
+    const wx = z.x - cam.x + canvas.width  / 2;
     const wy = z.y - cam.y + canvas.height / 2;
-    if(wx < -z.r-50 || wx > canvas.width+z.r+50) return;
+    if(wx < -z.r-50 || wx > canvas.width +z.r+50) return;
     if(wy < -z.r-50 || wy > canvas.height+z.r+50) return;
 
-    const c = ZC[z.type] || ZC.speed;
-    const r = c[0], g = c[1], b = c[2];
-
-    ctx.save();
-
-    // ── 1. Fond radial fixe ──
-    const bgGrad = ctx.createRadialGradient(wx, wy, 0, wx, wy, z.r);
-    bgGrad.addColorStop(0,    `rgba(${r},${g},${b},0.13)`);
-    bgGrad.addColorStop(0.55, `rgba(${r},${g},${b},0.05)`);
-    bgGrad.addColorStop(1,    `rgba(${r},${g},${b},0)`);
-    ctx.beginPath();
-    ctx.arc(wx, wy, z.r, 0, Math.PI * 2);
-    ctx.fillStyle = bgGrad;
-    ctx.fill();
-
-    // ── 2. AURA RESPIRANTE — monte et descend avec breath (0..1) ──
-    // Le rayon de l'aura varie entre 50% et 80% du cercle
-    const auraR = z.r * (0.50 + breath * 0.30);
-    const auraAlpha = 0.07 + breath * 0.16; // 0.07..0.23
-    const auraGrad = ctx.createRadialGradient(wx, wy, auraR * 0.15, wx, wy, auraR);
-    auraGrad.addColorStop(0, `rgba(${r},${g},${b},${(auraAlpha * 2.2).toFixed(3)})`);
-    auraGrad.addColorStop(0.5, `rgba(${r},${g},${b},${auraAlpha.toFixed(3)})`);
-    auraGrad.addColorStop(1,   `rgba(${r},${g},${b},0)`);
-    ctx.beginPath();
-    ctx.arc(wx, wy, auraR, 0, Math.PI * 2);
-    ctx.fillStyle = auraGrad;
-    ctx.fill();
-
-    // ── 3. Anneau extérieur tirets — alpha FIXE, pas de clignotement ──
-    ctx.beginPath();
-    ctx.arc(wx, wy, z.r, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(${r},${g},${b},0.42)`;
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([14, 9]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // ── 4. Badge central ──
-    const badgeR = 44;
-
-    // Halo derrière le badge — respire avec l'aura
-    const haloR = badgeR + 6 + breath * 12;
-    const haloGrad = ctx.createRadialGradient(wx, wy, badgeR - 2, wx, wy, haloR);
-    haloGrad.addColorStop(0, `rgba(${r},${g},${b},${(0.22 + breath * 0.22).toFixed(3)})`);
-    haloGrad.addColorStop(1, `rgba(${r},${g},${b},0)`);
-    ctx.beginPath();
-    ctx.arc(wx, wy, haloR, 0, Math.PI * 2);
-    ctx.fillStyle = haloGrad;
-    ctx.fill();
-
-    // Fond badge sombre
-    ctx.beginPath();
-    ctx.arc(wx, wy, badgeR, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(4,4,16,0.90)';
-    ctx.fill();
-
-    // Contour badge — épaisseur et glow qui respirent
-    ctx.beginPath();
-    ctx.arc(wx, wy, badgeR, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(${r},${g},${b},${(0.65 + breath * 0.35).toFixed(3)})`;
-    ctx.lineWidth = 1.8 + breath * 1.4;
-    if(GLOW_ON) {
-      ctx.shadowColor = `rgb(${r},${g},${b})`;
-      ctx.shadowBlur = 6 + breath * 14;
+    const zc = _zoneCache[zi];
+    // Re-render offscreen seulement si breath change de >0.02 (~16fps max)
+    if(!zc.osc || Math.abs(breath - zc.lastBreath) > 0.02) {
+      _renderZoneOSC(z, zc, breath);
     }
-    ctx.stroke();
-    ctx.shadowBlur = 0;
 
-    // ── 5. Icône emoji ──
-    ctx.font = '22px serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const icon = z.label.split(' ')[0];
-    ctx.fillText(icon, wx, wy - 11);
+    // Blit rapide vers le canvas principal
+    if(zc.osc) {
+      const half = zc.size / 2;
+      ctx.drawImage(zc.osc, wx - half, wy - half);
 
-    // ── 6. Nom ──
-    ctx.font = 'bold 9.5px Orbitron, monospace';
-    ctx.fillStyle = `rgba(${r},${g},${b},1)`;
-    const zoneName = z.label.replace(icon + ' ZONE ', '').replace(icon + ' ', '');
-    ctx.fillText(zoneName, wx, wy + 7);
-
-    // ── 7. Description ──
-    ctx.font = '7px Orbitron, monospace';
-    ctx.fillStyle = 'rgba(255,255,255,0.38)';
-    ctx.fillText(ZONE_DESC[z.type] || '', wx, wy + 19);
-
-    ctx.restore();
+      // Glow sur le badge (seulement desktop, appliqué sur canvas principal)
+      if(GLOW_ON) {
+        const col = _ZC_RGB[z.type] || _ZC_RGB.speed;
+        ctx.save();
+        ctx.beginPath(); ctx.arc(wx, wy, 44, 0, Math.PI*2);
+        ctx.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},${(0.65+breath*0.35).toFixed(2)})`;
+        ctx.lineWidth = 1.8 + breath * 1.4;
+        ctx.shadowColor = `rgb(${col[0]},${col[1]},${col[2]})`;
+        ctx.shadowBlur = 6 + breath * 14;
+        ctx.stroke(); ctx.shadowBlur = 0;
+        ctx.restore();
+      }
+    } else {
+      // Fallback si OffscreenCanvas non dispo : rendu direct (comportement original allégé)
+      const col = _ZC_RGB[z.type] || _ZC_RGB.speed;
+      const r = col[0], g = col[1], b = col[2];
+      ctx.save();
+      ctx.beginPath(); ctx.arc(wx, wy, z.r, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(${r},${g},${b},0.08)`; ctx.fill();
+      ctx.strokeStyle = `rgba(${r},${g},${b},0.42)`; ctx.lineWidth=1.5;
+      ctx.setLineDash([14,9]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.font='22px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillStyle=`rgba(${r},${g},${b},1)`;
+      ctx.fillText(z.label.split(' ')[0], wx, wy);
+      ctx.restore();
+    }
   });
 }
 
@@ -5932,34 +6104,51 @@ function drawMinimap(ctx, gs) {
     ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
   }
 
-  // Snakes
+  // Snakes — bots en 1 seul beginPath/fill, boss + joueur séparément
+  // Passe 1 : tous les bots non-boss
+  ctx.beginPath();
+  ctx.fillStyle = '#888899';
   gs.snakes.forEach(s => {
-    if(!s.alive) return;
+    if(!s.alive || s.isPlayer || s.isBoss) return;
     const mx = s.head.x * scale;
     const my = s.head.y * scale;
+    ctx.moveTo(mx + 2, my);
+    ctx.arc(mx, my, 2, 0, Math.PI*2);
+  });
+  ctx.fill();
+
+  // Passe 2 : boss (blink animé)
+  gs.snakes.forEach(s => {
+    if(!s.alive || !s.isBoss) return;
+    const mx = s.head.x * scale;
+    const my = s.head.y * scale;
+    const blink = Math.floor(Date.now() / 300) % 2 === 0;
     ctx.beginPath();
-    if(s.isBoss) {
-      const blink = Math.floor(Date.now() / 300) % 2 === 0;
-      ctx.beginPath();
-      ctx.arc(mx, my, blink ? 6 : 4, 0, Math.PI*2);
-      ctx.fillStyle = blink ? '#ff6600' : '#ff3300';
-      ctx.shadowColor = '#ff3300';
-      ctx.shadowBlur = blink ? 10 : 5;
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    } else {
-      ctx.arc(mx, my, s.isPlayer ? 4 : 2, 0, Math.PI*2);
-      ctx.fillStyle = s.isPlayer ? '#00f5ff' : getSkin(s.skin).head;
-      ctx.fill();
-    }
+    ctx.arc(mx, my, blink ? 6 : 4, 0, Math.PI*2);
+    ctx.fillStyle = blink ? '#ff6600' : '#ff3300';
+    ctx.shadowColor = '#ff3300';
+    ctx.shadowBlur = blink ? 10 : 5;
+    ctx.fill();
+    ctx.shadowBlur = 0;
   });
 
-  // Foods — skip sur mobile (trop de dots = lent)
+  // Passe 3 : joueur
+  if(gs.player?.alive) {
+    const mx = gs.player.head.x * scale;
+    const my = gs.player.head.y * scale;
+    ctx.beginPath();
+    ctx.arc(mx, my, 4, 0, Math.PI*2);
+    ctx.fillStyle = '#00f5ff';
+    ctx.fill();
+  }
+
+  // Foods — 1 sur 3 (imperceptible à cette échelle, -66% draw calls)
   if(!IS_MOBILE) {
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    gs.foods.forEach(f => {
+    for(let _fi = 0; _fi < gs.foods.length; _fi += 3) {
+      const f = gs.foods[_fi];
       ctx.fillRect(f.pos.x*scale-0.5, f.pos.y*scale-0.5, 1, 1);
-    });
+    }
   }
 
   // ── ZONE BR sur la minimap ──
@@ -6148,9 +6337,9 @@ function updateHUD(gs) {
   const lenEl = _dom.hLen;
   if(lenEl) lenEl.textContent = gs.frame % 10 === 0 ? p.score.toLocaleString() : (lenEl.textContent); // #8 FIX: throttle Intl 10f
   const eBar = _dom.energyBar;
-  if(eBar) eBar.style.width = p.energy + '%';
+  if(eBar && gs.frame % 3 === 0) eBar.style.width = p.energy.toFixed(1) + '%'; // throttle 20fps
   const hKillsEl = _dom.hKills;
-  if(hKillsEl) hKillsEl.textContent = p.kills;
+  if(hKillsEl && gs.frame % 10 === 0) hKillsEl.textContent = p.kills; // throttle 6fps
 
   // Rang — throttlé toutes les 30 frames (évite calculs sur 99 bots à 60fps)
   if(gs.frame % 30 === 0) {
@@ -6266,8 +6455,8 @@ function addCollectFlash(x, y, color='#ffd700') {
 // Sillage du serpent (trail amélioré)
 let trailParticles = [];
 function addTrailParticle(x, y, color) {
+  if (trailParticles.length >= 200) { trailParticles[0]=trailParticles[trailParticles.length-1]; trailParticles.pop(); }
   trailParticles.push({ x, y, color, r: Math.random()*3+1, alpha:0.6, vx:(Math.random()-0.5)*0.5, vy:(Math.random()-0.5)*0.5 });
-  if (trailParticles.length > 200) trailParticles.shift();
 }
 
 // Explosion de mort
@@ -6313,7 +6502,8 @@ function addDeathExplosion(x, y, snakeColor) {
 }
 
 // Fonction d'overlay des effets visuels — à appeler dans la boucle de rendu
-function drawVisualEffects(ctx, camX, camY) {
+function drawVisualEffects(ctx, camX, camY, nowMs) {
+  if(nowMs === undefined) nowMs = Date.now();
   // Particules de fond (étoiles flottantes)
   // Particules de fond — skip sur mobile (économie significative)
   if(!IS_MOBILE) {
@@ -6322,7 +6512,7 @@ function drawVisualEffects(ctx, camX, camY) {
       if (p.y < camY - 50) p.y = camY + canvas.height + 50;
       const sx = p.x - camX, sy = p.y - camY;
       if (sx < -10 || sx > canvas.width+10) return;
-      ctx.globalAlpha = p.alpha * (0.5 + 0.5 * Math.sin(Date.now()*0.001 + p.x));
+      ctx.globalAlpha = p.alpha * (0.5 + 0.5 * Math.sin(nowMs*0.001 + p.x));
       ctx.fillStyle = p.color;
       ctx.beginPath(); ctx.arc(sx, sy, p.r, 0, Math.PI*2); ctx.fill();
     });
@@ -6334,29 +6524,27 @@ function drawVisualEffects(ctx, camX, camY) {
     const p = trailParticles[i];
     p.x += p.vx; p.y += p.vy; p.alpha -= 0.025;
     if (p.alpha <= 0) { trailParticles[i]=trailParticles[trailParticles.length-1]; trailParticles.pop(); continue; }
-    ctx.save();
     ctx.globalAlpha = p.alpha;
     ctx.fillStyle = p.color;
     ctx.beginPath();
     ctx.arc(p.x - camX, p.y - camY, p.r, 0, Math.PI*2);
     ctx.fill();
-    ctx.restore();
   }
+  ctx.globalAlpha = 1;
 
   // Flashes de collecte
   for(let i = collectFlashes.length - 1; i >= 0; i--) {
     const f = collectFlashes[i];
     f.r += 2; f.alpha -= 0.08;
     if (f.alpha <= 0) { collectFlashes[i]=collectFlashes[collectFlashes.length-1]; collectFlashes.pop(); continue; }
-    ctx.save();
     ctx.globalAlpha = f.alpha;
     ctx.strokeStyle = f.color;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(f.x - camX, f.y - camY, f.r, 0, Math.PI*2);
     ctx.stroke();
-    ctx.restore();
   }
+  ctx.globalAlpha = 1;
 
   // Explosions de mort
   for(let i = deathExplosions.length - 1; i >= 0; i--) {
@@ -6365,15 +6553,14 @@ function drawVisualEffects(ctx, camX, camY) {
       // Onde de choc circulaire
       p.ringR += 6; p.alpha -= 0.05;
       if(p.alpha <= 0) { deathExplosions[i]=deathExplosions[deathExplosions.length-1]; deathExplosions.pop(); continue; }
-      ctx.save();
       ctx.globalAlpha = p.alpha * 0.6;
       ctx.strokeStyle = p.color;
       ctx.lineWidth = 3;
-      ctx.shadowColor = p.color; ctx.shadowBlur = 15;
+      if(GLOW_ON) { ctx.shadowColor = p.color; ctx.shadowBlur = 15; }
       ctx.beginPath();
       ctx.arc(p.x-camX, p.y-camY, p.ringR, 0, Math.PI*2);
       ctx.stroke();
-      ctx.restore();
+      ctx.shadowBlur = 0;
       continue;
     }
     p.x += p.vx; p.y += p.vy;
@@ -6381,21 +6568,22 @@ function drawVisualEffects(ctx, camX, camY) {
     p.vx *= 0.97; p.vy *= 0.97;
     p.alpha -= 0.03; p.r -= 0.04;
     if(p.alpha <= 0 || p.r <= 0) { deathExplosions[i]=deathExplosions[deathExplosions.length-1]; deathExplosions.pop(); continue; }
-    ctx.save();
     ctx.globalAlpha = p.alpha;
     ctx.fillStyle = p.color;
-    ctx.shadowColor = p.color; ctx.shadowBlur = 6;
+    if(GLOW_ON) { ctx.shadowColor = p.color; ctx.shadowBlur = 6; }
     ctx.beginPath();
     ctx.arc(p.x-camX, p.y-camY, Math.max(0.1,p.r), 0, Math.PI*2);
     ctx.fill();
-    ctx.restore();
+    ctx.shadowBlur = 0;
   }
+  ctx.globalAlpha = 1;
 }
 
 // Grille de fond néon
-function drawNeonGrid(ctx, camX, camY, w, h) {
+function drawNeonGrid(ctx, camX, camY, w, h, nowMs) {
+  if(nowMs === undefined) nowMs = Date.now();
   const gridSize = 80;
-  const pulse = 0.15 + 0.05 * Math.sin(Date.now() * 0.0008);
+  const pulse = 0.15 + 0.05 * Math.sin(nowMs * 0.0008);
   ctx.save();
   ctx.strokeStyle = `rgba(0,245,255,${pulse})`;
   ctx.lineWidth = 0.4;

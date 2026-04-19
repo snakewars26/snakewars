@@ -5492,7 +5492,8 @@ function gameLoop(timestamp = 0) {
           // AI vs AI
           winner.score += Math.floor(loser.length);
         }
-        killSnake(loser, gs, winner.isPlayer || winner.isBoss);
+        if(!winner.isPlayer && winner.isBoss) loser.killer = winner.name;
+        killSnake(loser, gs, winner.isPlayer);
       }
     }
   }

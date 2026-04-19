@@ -1406,6 +1406,39 @@ function renderSkins(){
 }
 function drawSkinPreview(c,skin,sz){
   const cx=sz/2;
+
+  if(skin.flag && _FLAG_PATTERNS.has(skin.id)) {
+    // ── Aperçu drapeau : rectangle arrondi avec la texture du drapeau ──
+    c.save();
+    // Fond sombre derrière le drapeau
+    c.fillStyle='#111'; c.beginPath(); c.arc(cx,cx,cx*.92,0,Math.PI*2); c.fill();
+    // Clipper en cercle
+    c.beginPath(); c.arc(cx,cx,cx*.82,0,Math.PI*2); c.clip();
+    // Appliquer le pattern (anchré en haut-gauche du canvas preview)
+    const pat = _FLAG_PATTERNS.get(skin.id);
+    try { pat.setTransform(new DOMMatrix().scaleSelf(sz/96, sz/64)); } catch(e){}
+    c.fillStyle = pat;
+    c.fillRect(0, 0, sz, sz);
+    c.restore();
+    // Halo de la couleur principale
+    c.shadowBlur=14; c.shadowColor=skin.head;
+    c.strokeStyle=skin.head; c.lineWidth=2.5;
+    c.beginPath(); c.arc(cx,cx,cx*.82,0,Math.PI*2); c.stroke();
+    c.shadowBlur=0;
+    // Yeux du serpent
+    for(const side of[-1,1]){
+      const ex=cx+Math.cos(-0.5)*cx*.45+Math.cos(-Math.PI/2)*cx*.45*side;
+      const ey=cx+Math.sin(-0.5)*cx*.45+Math.sin(-Math.PI/2)*cx*.45*side;
+      c.fillStyle='white'; c.beginPath(); c.arc(ex,ey,cx*.14,0,Math.PI*2); c.fill();
+      c.fillStyle='#000';  c.beginPath(); c.arc(ex+1,ey+1,cx*.07,0,Math.PI*2); c.fill();
+    }
+    // Emoji drapeau en grand en bas à droite
+    c.font=(sz*.38)+'px serif'; c.textAlign='right'; c.textBaseline='bottom';
+    c.globalAlpha=.95; c.fillText(skin.flag,sz*.98,sz*.98); c.globalAlpha=1;
+    return;
+  }
+
+  // ── Aperçu standard (non-drapeau) ──
   const g=c.createRadialGradient(cx-8,cx-10,2,cx,cx,cx*.95);
   g.addColorStop(0,skin.head);g.addColorStop(.7,skin.body[skin.body.length-1]);g.addColorStop(1,'rgba(0,0,0,.4)');
   c.fillStyle=g;c.shadowBlur=12;c.shadowColor=skin.head;
@@ -1422,10 +1455,6 @@ function drawSkinPreview(c,skin,sz){
     const ey=cx+Math.sin(-0.5)*cx*.55+Math.sin(-Math.PI/2)*cx*.55*side;
     c.fillStyle='white';c.beginPath();c.arc(ex,ey,cx*.14,0,Math.PI*2);c.fill();
     c.fillStyle='#000';c.beginPath();c.arc(ex+1,ey+1,cx*.07,0,Math.PI*2);c.fill();
-  }
-  if(skin.flag){
-    c.font=(sz*.4)+'px serif';c.textAlign='right';c.textBaseline='bottom';
-    c.globalAlpha=.92;c.fillText(skin.flag,sz*.97,sz*.97);c.globalAlpha=1;
   }
 }
 function selectSkin(id){
@@ -1600,6 +1629,8 @@ let myPlayerId    = null; // ID unique généré à la connexion
 let _ablyLastPub  = 0;   // anti-burst : timestamp dernière publication
 // Pré-allocation payload publish — zéro alloc à chaque envoi (10×/s)
 let _pubHead = null, _pubPath = null, _pubPayload = null;
+// Delta tracker : skip publish si rien n'a changé
+let _pubPrev = null; // { hx, hy, ang, boost, sz } — valeurs du dernier publish réel
 // Pool entrant : scratch objects réutilisés à chaque message reçu — zéro alloc/message
 const _inHead  = { x: 0, y: 0 };
 const _inPath  = Array.from({ length: 15 }, () => ({ x: 0, y: 0 }));
@@ -1778,7 +1809,7 @@ function startPositionSync() {
 // ── Déconnexion propre ──
 function stopPositionSync() {
   if (syncInterval) { if (typeof syncInterval === 'number') clearInterval(syncInterval); syncInterval = null; }
-  _pubHead = null; _pubPath = null; _pubPayload = null;
+  _pubHead = null; _pubPath = null; _pubPayload = null; _pubPrev = null;
 
   if (ablyChannel && myPlayerId) {
     try {
@@ -1801,15 +1832,32 @@ function stopMultiplayerChat(){}
 // ── Interpoler et nettoyer les joueurs distants ──
 // ── publishSync : appelé depuis le gameLoop (~60fps), throttle à 100ms interne ──
 // Zéro setInterval — tick réseau aligné sur le rendu, élimine les micro-freezes de désynchronisation
-function publishSync() {
+function publishSync(nowMs) {
   if (!syncInterval || !ablyChannel || !_pubPayload) return;
   if (ablyClient?.connection?.state !== 'connected') return;
-  const _now = Date.now();
+  const _now = nowMs !== undefined ? nowMs : Date.now();
   if (_now - _ablyLastPub < 100) return; // 10 msg/s max
-  _ablyLastPub = _now;
 
   const p = gameState?.player;
   if (!p || !p.alive) return;
+
+  // ── Delta skip : ne pas publier si la position/angle n'ont pas changé ──
+  const _hx  = ~~p.head.x, _hy = ~~p.head.y;
+  const _ang  = Math.round((p.angle||0) * 100) / 100;
+  const _boost= p.boosting || false;
+  const _sz   = ~~(p.size||8);
+  if(_pubPrev &&
+     Math.abs(_hx - _pubPrev.hx) < 3 &&
+     Math.abs(_hy - _pubPrev.hy) < 3 &&
+     _ang   === _pubPrev.ang   &&
+     _boost === _pubPrev.boost &&
+     _sz    === _pubPrev.sz) {
+    return; // rien de significatif n'a changé — skip, économise ~30% des msgs réseau
+  }
+  if(!_pubPrev) _pubPrev = { hx:0, hy:0, ang:0, boost:false, sz:0 };
+  _pubPrev.hx=_hx; _pubPrev.hy=_hy; _pubPrev.ang=_ang; _pubPrev.boost=_boost; _pubPrev.sz=_sz;
+
+  _ablyLastPub = _now;
 
   // Remplir le buffer path pré-alloué (mutation, zéro alloc)
   let _plen = 0;
@@ -1838,8 +1886,8 @@ function publishSync() {
   _pubPath.length = 12; // restaurer après serialisation synchrone
 }
 
-function interpolateRemotePlayers() {
-  const now = Date.now();
+function interpolateRemotePlayers(nowMs) {
+  const now = nowMs !== undefined ? nowMs : Date.now();
 
   for (const id in remotePlayers) {
     const rp = remotePlayers[id];
@@ -1910,7 +1958,7 @@ function getEquippedAccessories(){ return sd.equippedAcc || []; }
 // La tête du serpent est un ovale centré sur (hx,hy), rayon ~sz*1.1 dans la direction headAng.
 // "Dessus de la tête" = vecteur perpendiculaire gauche : (-sin(angle), cos(angle))
 // Toutes les tailles sont proportionnelles à snake.size pour suivre la croissance du serpent.
-function drawAccessories(ctx, snake, cam) {
+function drawAccessories(ctx, snake, cam, nowMs) {
   if (!snake.alive || !snake.path || snake.path.length < 2) return;
   if (!snake.isPlayer) return;
   const equipped = getEquippedAccessories();
@@ -1924,7 +1972,7 @@ function drawAccessories(ctx, snake, cam) {
   const hy = snake.path[0].y - cam.y + ch * 0.5;
   const sz  = snake.size;                // rayon de base de la tête
   const ang = snake.angle;              // direction de déplacement
-  const t   = Date.now() / 1000;
+  const t   = (nowMs !== undefined ? nowMs : Date.now()) / 1000;
 
   const upX  =  Math.sin(ang), upY  = -Math.cos(ang); // vecteur perpendiculaire (écharpe)
 
@@ -3188,7 +3236,7 @@ function drawBattleRoyaleZone(ctx, camX, camY) {
   ctx.shadowBlur = isShrinking ? 30 : 15;
   // Légère pulsation douce si rétrécissement imminent (pas de clignotement agressif)
   if(!isShrinking && nextShrink < 10) {
-    ctx.globalAlpha = 0.75 + 0.25 * Math.sin(Date.now() * 0.003);
+    ctx.globalAlpha = 0.75 + 0.25 * Math.sin(nowMs * 0.003);
   }
   ctx.setLineDash([15,8]);
   ctx.beginPath();
@@ -3251,6 +3299,173 @@ const mmCtx = mmCanvas ? mmCanvas.getContext('2d') : null;
 if(!canvas || !ctx) console.error('SERPEX: canvas introuvable — vérifiez id="gc"');
 if(!mmCanvas || !mmCtx) console.error('SERPEX: minimapCanvas introuvable — vérifiez id="mmCvs"');
 
+// ── FLAG PATTERNS : CanvasPattern pré-généré par drapeau pays ──
+// Chaque tile 96×64px est répété comme strokeStyle sur tout le corps du serpent.
+const _FLAG_PATTERNS = new Map();
+(function _initFlagPatterns() {
+  if(!ctx) return;
+  const pc = document.createElement('canvas');
+  const px = pc.getContext('2d');
+  const W = 96, H = 64;
+  pc.width = W; pc.height = H;
+
+  const _rect = (c,x,y,w,h)=>{ px.fillStyle=c; px.fillRect(x,y,w,h); };
+  const _clear = ()=>{ px.clearRect(0,0,W,H); };
+
+  const defs = {
+    // 🇫🇷 France — bandes verticales bleu | blanc | rouge
+    20: ()=>{
+      _rect('#002395',  0,0,32,H);
+      _rect('#ffffff', 32,0,32,H);
+      _rect('#ed2939', 64,0,32,H);
+    },
+    // 🇺🇸 USA — 13 bandes horizontales rouge/blanc + canton bleu
+    21: ()=>{
+      const s=['#b22234','#ffffff'];
+      for(let i=0;i<13;i++){ _rect(s[i%2],0,i*(H/13),W,H/13+1); }
+      _rect('#3c3b6e',0,0,38,29);
+      // étoiles simplifiées
+      px.fillStyle='#ffffff';
+      for(let r=0;r<5;r++) for(let c=0;c<6;c++){
+        const ex=4+c*6+(r%2)*3, ey=4+r*5;
+        px.beginPath(); px.arc(ex,ey,1.2,0,Math.PI*2); px.fill();
+      }
+    },
+    // 🇬🇧 UK — Union Jack simplifié
+    22: ()=>{
+      _rect('#012169',0,0,W,H);
+      // croix blanche diagonale (X)
+      px.strokeStyle='#ffffff'; px.lineWidth=12;
+      px.beginPath(); px.moveTo(0,0); px.lineTo(W,H); px.stroke();
+      px.beginPath(); px.moveTo(W,0); px.lineTo(0,H); px.stroke();
+      // croix rouge diagonale (offset)
+      px.strokeStyle='#c8102e'; px.lineWidth=6;
+      px.beginPath(); px.moveTo(8,0); px.lineTo(W,H-6); px.stroke();
+      px.beginPath(); px.moveTo(0,8); px.lineTo(W-8,H); px.stroke();
+      px.beginPath(); px.moveTo(W-8,0); px.lineTo(0,H-6); px.stroke();
+      px.beginPath(); px.moveTo(W,8); px.lineTo(8,H); px.stroke();
+      // croix blanche horizontale/verticale (+)
+      _rect('#ffffff',0,H/2-8,W,16);
+      _rect('#ffffff',W/2-8,0,16,H);
+      // croix rouge centrale
+      _rect('#c8102e',0,H/2-5,W,10);
+      _rect('#c8102e',W/2-5,0,10,H);
+    },
+    // 🇩🇪 Allemagne — 3 bandes horizontales noir | rouge | or
+    23: ()=>{
+      _rect('#000000',0,0,    W,H/3);
+      _rect('#dd0000',0,H/3,  W,H/3);
+      _rect('#ffce00',0,H*2/3,W,H/3+1);
+    },
+    // 🇪🇸 Espagne — rouge | jaune-or | rouge (2:3:2)
+    24: ()=>{
+      const r=Math.round(H/7);
+      _rect('#aa151b',0,0,    W,r*2);
+      _rect('#f1bf00',0,r*2,  W,r*3);
+      _rect('#aa151b',0,r*5,  W,r*2+1);
+    },
+    // 🇧🇷 Brésil — vert + losange jaune + cercle bleu + bande blanche
+    25: ()=>{
+      _rect('#009c3b',0,0,W,H);
+      // losange jaune
+      px.fillStyle='#fedf00';
+      px.beginPath();
+      px.moveTo(W/2,4); px.lineTo(W-6,H/2); px.lineTo(W/2,H-4); px.lineTo(6,H/2);
+      px.closePath(); px.fill();
+      // cercle bleu
+      px.fillStyle='#002776';
+      px.beginPath(); px.arc(W/2,H/2,16,0,Math.PI*2); px.fill();
+      // bande blanche
+      px.strokeStyle='#ffffff'; px.lineWidth=3;
+      px.beginPath(); px.arc(W/2,H/2+4,14,-Math.PI*.2,Math.PI*1.2); px.stroke();
+      // étoile simplifiée
+      px.fillStyle='#ffffff';
+      px.beginPath(); px.arc(W/2,H/2,3,0,Math.PI*2); px.fill();
+    },
+    // 🇯🇵 Japon — fond blanc + cercle rouge centré
+    26: ()=>{
+      _rect('#ffffff',0,0,W,H);
+      px.fillStyle='#bc002d';
+      px.beginPath(); px.arc(W/2,H/2,20,0,Math.PI*2); px.fill();
+    },
+    // 🇮🇹 Italie — bandes verticales vert | blanc | rouge
+    27: ()=>{
+      _rect('#009246',  0,0,32,H);
+      _rect('#ffffff', 32,0,32,H);
+      _rect('#ce2b37', 64,0,32,H);
+    },
+    // 🇨🇦 Canada — rouge | blanc | rouge + feuille d'érable
+    28: ()=>{
+      _rect('#ff0000',  0,0,24,H);
+      _rect('#ffffff', 24,0,48,H);
+      _rect('#ff0000', 72,0,24,H);
+      // feuille d'érable simplifiée
+      px.fillStyle='#ff0000';
+      px.beginPath();
+      const cx=W/2,cy=H/2,s2=14;
+      // étoile à 8 branches
+      for(let a=0;a<8;a++){
+        const ang=a*Math.PI/4, r1=s2, r2=s2*0.45;
+        const x1=cx+Math.cos(ang)*r1, y1=cy+Math.sin(ang)*r1;
+        const x2=cx+Math.cos(ang+Math.PI/8)*r2, y2=cy+Math.sin(ang+Math.PI/8)*r2;
+        if(a===0) px.moveTo(cx,cy-2);
+        px.lineTo(x1,y1); px.lineTo(x2,y2);
+      }
+      px.closePath(); px.fill();
+      // tige
+      _rect('#ff0000',W/2-2,H/2+10,4,8);
+    },
+    // 🇵🇹 Portugal — vert | rouge vertical (2:3)
+    29: ()=>{
+      _rect('#006600',  0,0,38,H);
+      _rect('#ff0000', 38,0,58,H);
+      // bouclier or simplifié
+      px.fillStyle='#ffcc00';
+      px.beginPath(); px.arc(38,H/2,12,0,Math.PI*2); px.fill();
+      px.fillStyle='#006600';
+      px.beginPath(); px.arc(38,H/2,7,0,Math.PI*2); px.fill();
+    },
+    // 🇲🇽 Mexique — bandes verticales vert | blanc | rouge
+    30: ()=>{
+      _rect('#006847',  0,0,32,H);
+      _rect('#ffffff', 32,0,32,H);
+      _rect('#ce1126', 64,0,32,H);
+      // aigle simplifié (cercle brun)
+      px.fillStyle='#8B4513';
+      px.beginPath(); px.arc(W/2,H/2,9,0,Math.PI*2); px.fill();
+      px.fillStyle='#228B22';
+      px.beginPath(); px.arc(W/2,H/2,5,0,Math.PI*2); px.fill();
+    },
+    // 🇦🇷 Argentine — bandes horizontales bleu ciel | blanc | bleu ciel + soleil
+    31: ()=>{
+      const b='#74acdf';
+      _rect(b,         0,0,    W,H/3);
+      _rect('#ffffff', 0,H/3,  W,H/3);
+      _rect(b,         0,H*2/3,W,H/3+1);
+      // soleil de mai
+      px.fillStyle='#f6b40e';
+      px.beginPath(); px.arc(W/2,H/2,10,0,Math.PI*2); px.fill();
+      px.strokeStyle='#f6b40e'; px.lineWidth=2.5;
+      for(let a=0;a<16;a++){
+        const ang=a*Math.PI/8;
+        const r1=12, r2=18;
+        px.beginPath();
+        px.moveTo(W/2+Math.cos(ang)*r1, H/2+Math.sin(ang)*r1);
+        px.lineTo(W/2+Math.cos(ang)*r2, H/2+Math.sin(ang)*r2);
+        px.stroke();
+      }
+    },
+  };
+
+  SKINS.filter(s=>s.flag).forEach(skin=>{
+    const fn=defs[skin.id];
+    if(!fn) return;
+    _clear(); fn();
+    const pat=ctx.createPattern(pc,'repeat');
+    if(pat) _FLAG_PATTERNS.set(skin.id, pat);
+  });
+})();
+
 const WORLD = 6000;
 const BASE_SPEED = 4; // vitesse réduite à 4
 const SEGMENT_GAP = 6; // bon équilibre lissé/performance
@@ -3260,28 +3475,40 @@ const POWERUP_COUNT = 18;
 
 // ── PARTICLES SYSTEM ──
 const particles = [];
+// Trail template réutilisé — chaque particule poolée réutilise son propre tableau trail
+function _getPar(x, y) {
+  const p = _poolPAR.pop();
+  if(p) {
+    // Réinitialiser le trail sans alloc
+    for(let _j=0;_j<6;_j++) { p.trail[_j].x=x; p.trail[_j].y=y; }
+    p._ti=0; return p;
+  }
+  const tr=[{x,y},{x,y},{x,y},{x,y},{x,y},{x,y}];
+  return { x, y, vx:0, vy:0, life:1, maxLife:1, color:'', size:3, trail:tr, _ti:0 };
+}
 function spawnParticles(x, y, color, count=12, speed=3) {
   if(particles.length > 150) particles.length = 150;
   for(let i=0;i<count;i++) {
     const a = (Math.PI*2/count)*i + Math.random()*0.3;
     const spd = speed * (0.5+Math.random());
-    // trail circulaire : tableau fixe 6 slots + index tête
-    const tr = [{x,y},{x,y},{x,y},{x,y},{x,y},{x,y}];
-    particles.push({ x, y, vx:Math.cos(a)*spd, vy:Math.sin(a)*spd,
-      life:1, maxLife:1, color, size:3+Math.random()*4, trail:tr, _ti:0 });
+    const p = _getPar(x, y);
+    p.x=x; p.y=y; p.vx=Math.cos(a)*spd; p.vy=Math.sin(a)*spd;
+    p.life=1; p.maxLife=1; p.color=color; p.size=3+Math.random()*4;
+    particles.push(p);
   }
 }
 function updateParticles() {
   for(let i=particles.length-1;i>=0;i--) {
     const p = particles[i];
-    // buffer circulaire : écrase le slot suivant, zéro push/shift/alloc
     p._ti = (p._ti + 1) % 6;
-    p.trail[p._ti].x = p.x;
-    p.trail[p._ti].y = p.y;
+    p.trail[p._ti].x = p.x; p.trail[p._ti].y = p.y;
     p.x+=p.vx; p.y+=p.vy;
     p.vx*=0.92; p.vy*=0.92;
     p.life-=0.025;
-    if(p.life<=0) { particles[i]=particles[particles.length-1]; particles.pop(); }
+    if(p.life<=0) {
+      const _dead=particles[i]; particles[i]=particles[particles.length-1]; particles.pop();
+      _poolPAR.push(_dead); // recycler
+    }
   }
 }
 function drawParticles(ctx, cam) {
@@ -3937,12 +4164,13 @@ class Snake {
     this.angle+=Math.max(-turnSpeed,Math.min(turnSpeed,diff));
     this.ai_targetAngle=desiredAngle;
   }
-  draw(ctx, cam) {
+  draw(ctx, cam, nowMs) {
     if(!this.alive || this.path.length < 2) return;
     const skinData   = getSkin(this.skin);
     const bodyColors = skinData.body;
     const isAnimated = skinData.animated;
-    const animTime   = Date.now() / 1000;
+    if(nowMs === undefined) nowMs = Date.now();
+    const animTime   = nowMs / 1000;
     const cw = canvas.width, ch = canvas.height;
     const margin = 80;
     const pathLen = this.path.length;
@@ -4000,6 +4228,16 @@ class Snake {
     }
 
     // ── PASSE 2 : corps principal coloré ──
+    const _flagPat = skinData.flag ? _FLAG_PATTERNS.get(skinData.id) : null;
+    // Ancrer le pattern sur la caméra 1 seule fois (pas par segment — trop cher)
+    if(_flagPat) {
+      try {
+        _flagPat.setTransform(new DOMMatrix().translateSelf(
+          ((cw*0.5 - cam.x) % 96 + 96) % 96,
+          ((ch*0.5 - cam.y) % 64 + 64) % 64
+        ));
+      } catch(e) {} // setTransform non supporté sur Firefox < 99 — fallback silencieux
+    }
     {
       let lastLw=-1, lastCol=null, started=false;
       for(let i = pathLen-1; i >= 1; i--) {
@@ -4010,21 +4248,31 @@ class Snake {
         if(way<-margin&&wby<-margin) continue; if(way>ch+margin&&wby>ch+margin) continue;
         const t = i / pathLen;
         const lw = Math.round(bodyWidth(t) * 4) / 4;
-        // Légère variation de luminosité entre ventre et dos pour effet 3D
-        const bright = 38 + 28 * (1 - t * 0.6);
         let col;
-        const phase = animTime * 2 + t * 8;
-        if     (isAnimated==='wave')      col=`hsl(${((200+Math.sin(phase)*80)%360)|0},100%,${bright|0}%)`;
-        else if(isAnimated==='electric')  col=i%8<4?`hsl(55,100%,${bright|0}%)`:`hsl(35,90%,${(bright*.8)|0}%)`;
-        else if(isAnimated==='prismatic') col=`hsl(${((animTime*100+t*360)%360)|0},100%,${bright|0}%)`;
-        else if(isAnimated==='blackhole') col=`hsl(${(270+Math.sin(phase*0.7)*40)|0},85%,${(10+(1-t)*28)|0}%)`;
-        else if(isAnimated==='cosmic')    col=`hsl(${((animTime*50+t*200)%360)|0},85%,${bright|0}%)`;
-        else                              col=bodyColors[Math.floor(t*numColors)%numColors];
-        if(col!==lastCol||lw!==lastLw) {
-          if(started) ctx.stroke();
-          ctx.strokeStyle=col; ctx.lineWidth=lw;
-          ctx.beginPath(); ctx.moveTo(wax,way);
-          lastCol=col; lastLw=lw; started=true;
+        if(_flagPat) {
+          // Pattern drapeau : on regroupe par lineWidth uniquement (pas par couleur)
+          if(lw !== lastLw) {
+            if(started) ctx.stroke();
+            ctx.strokeStyle = _flagPat;
+            ctx.lineWidth = lw;
+            ctx.beginPath(); ctx.moveTo(wax, way);
+            lastLw = lw; lastCol = '_flag'; started = true;
+          }
+        } else {
+          const bright = 38 + 28 * (1 - t * 0.6);
+          const phase = animTime * 2 + t * 8;
+          if     (isAnimated==='wave')      col=`hsl(${((200+Math.sin(phase)*80)%360)|0},100%,${bright|0}%)`;
+          else if(isAnimated==='electric')  col=i%8<4?`hsl(55,100%,${bright|0}%)`:`hsl(35,90%,${(bright*.8)|0}%)`;
+          else if(isAnimated==='prismatic') col=`hsl(${((animTime*100+t*360)%360)|0},100%,${bright|0}%)`;
+          else if(isAnimated==='blackhole') col=`hsl(${(270+Math.sin(phase*0.7)*40)|0},85%,${(10+(1-t)*28)|0}%)`;
+          else if(isAnimated==='cosmic')    col=`hsl(${((animTime*50+t*200)%360)|0},85%,${bright|0}%)`;
+          else                              col=bodyColors[Math.floor(t*numColors)%numColors];
+          if(col!==lastCol||lw!==lastLw) {
+            if(started) ctx.stroke();
+            ctx.strokeStyle=col; ctx.lineWidth=lw;
+            ctx.beginPath(); ctx.moveTo(wax,way);
+            lastCol=col; lastLw=lw; started=true;
+          }
         }
         ctx.lineTo(wbx,wby);
       }
@@ -4108,7 +4356,7 @@ class Snake {
     // -- Bouclier --
     if(this.shieldActive) {
       if(this.spawnImmune) {
-        const spl = 0.5 + 0.5*Math.sin(Date.now()*0.008);
+        const spl = 0.5 + 0.5*Math.sin(nowMs*0.008);
         ctx.save();
         ctx.strokeStyle = `rgba(80,255,120,${0.5+spl*0.5})`;
         ctx.lineWidth = 3+spl*2; ctx.shadowColor='#50ff78'; ctx.shadowBlur=10+spl*8;
@@ -4282,11 +4530,12 @@ class Snake {
     }
   }
 
-    drawBoss(ctx, cam) {
+    drawBoss(ctx, cam, nowMs) {
     if(!this.alive || this.path.length < 2) return;
     const hw = this.path[0].x - cam.x + canvas.width/2;
     const hy = this.path[0].y - cam.y + canvas.height/2;
-    const t  = Date.now()/1000;
+    if(nowMs === undefined) nowMs = Date.now();
+    const t  = nowMs/1000;
 
     // Couleurs dynamiques selon le type de boss
     const c1   = this.bossColor1  || '#cc0000';
@@ -5172,8 +5421,9 @@ const FRAME_MS   = 16.67; // 60fps partout — fluidité maximale
 const GLOW_ON    = !IS_MOBILE; // shadowBlur désactivé sur mobile (gain GPU)
 
 // ── Dessiner les joueurs distants ──
-function drawRemotePlayers(ctx, cam) {
+function drawRemotePlayers(ctx, cam, nowMs) {
   if (!remotePlayers || !cam) return;
+  if(nowMs === undefined) nowMs = Date.now();
   const cw = ctx.canvas.width;
   const ch = ctx.canvas.height;
   const cw2 = cw * 0.5;
@@ -5186,14 +5436,24 @@ function drawRemotePlayers(ctx, cam) {
     const hy = rp.head.y - camY + ch2;
     if (hx < -100 || hx > cw + 100 || hy < -100 || hy > ch + 100) continue;
     const sz = rp.size || 8;
-    const skin = SKINS[rp.skinId] || SKINS[0];
+    const skin = _SKINS_MAP.get(rp.skinId) || SKINS[0];
     const bodyCol = skin?.body?.[0] || '#00d4ff';
     const headCol = skin?.head  || bodyCol;
+    // Pattern drapeau pour joueurs distants
+    const _rpPat = (skin?.flag && _FLAG_PATTERNS.has(skin.id)) ? _FLAG_PATTERNS.get(skin.id) : null;
+    if(_rpPat) {
+      try {
+        _rpPat.setTransform(new DOMMatrix().translateSelf(
+          ((cw2 - camX) % 96 + 96) % 96,
+          ((ch2 - camY) % 64 + 64) % 64
+        ));
+      } catch(e) {}
+    }
     ctx.save();
     // Corps
     if (rp.path && rp.path.length > 1) {
       ctx.beginPath();
-      ctx.strokeStyle = bodyCol;
+      ctx.strokeStyle = _rpPat || bodyCol;
       ctx.lineWidth = sz * 1.6;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
@@ -5214,7 +5474,7 @@ function drawRemotePlayers(ctx, cam) {
     if(GLOW_ON) { ctx.shadowColor = headCol; ctx.shadowBlur = 10; }
     ctx.fill();
     ctx.shadowBlur = 0;
-    // Pseudo — font sans template string (concat entier évite l'interpolation)
+    // Pseudo
     const _fSize = sz + 2 > 10 ? (sz + 2 | 0) : 10;
     ctx.font = 'bold ' + _fSize + 'px Orbitron,monospace';
     ctx.textAlign = 'center';
@@ -5255,10 +5515,10 @@ function gameLoop(timestamp = 0) {
   gs.frame++;
 
   // Sync multijoueur — aligné sur le rendu, zéro setInterval
-  publishSync();
+  publishSync(timestamp);
 
   // Interpoler les joueurs distants
-  interpolateRemotePlayers();
+  interpolateRemotePlayers(timestamp);
 
   // Update player direction
   const p = gs.player;
@@ -5789,8 +6049,8 @@ function gameLoop(timestamp = 0) {
       }
     }
     if(!visible) continue;
-    if(s.isBoss) { s.drawBoss(ctx, renderCam); }
-    else { s.draw(ctx, renderCam); ctx.globalAlpha = 1; ctx.shadowBlur = 0; ctx.globalCompositeOperation = 'source-over'; drawAccessories(ctx, s, renderCam); }
+    if(s.isBoss) { s.drawBoss(ctx, renderCam, timestamp); }
+    else { s.draw(ctx, renderCam, timestamp); ctx.globalAlpha = 1; ctx.shadowBlur = 0; ctx.globalCompositeOperation = 'source-over'; drawAccessories(ctx, s, renderCam, timestamp); }
   }
 
   // Particles
@@ -5800,7 +6060,7 @@ function gameLoop(timestamp = 0) {
   if(p && p.alive) drawPlayerArrow(ctx);
 
   // Dessiner les joueurs distants (multijoueur temps réel) — dans le bloc shake
-  drawRemotePlayers(ctx, renderCam);
+  drawRemotePlayers(ctx, renderCam, timestamp);
 
   if(shakeIntensity > 0.1) ctx.restore();
 
@@ -5813,7 +6073,7 @@ function gameLoop(timestamp = 0) {
   // Amis en ligne (mini badge)
 
   // Minimap
-  if(gs.frame % 2 === 0) drawMinimap(mmCtx, gs); // throttle 30fps — imperceptible
+  if(gs.frame % 2 === 0) drawMinimap(mmCtx, gs, timestamp); // throttle 30fps — imperceptible
 
   // HUD update
   updateHUD(gs);
@@ -6086,7 +6346,8 @@ function drawPlayerArrow(ctx) {
   ctx.stroke();
 }
 
-function drawMinimap(ctx, gs) {
+function drawMinimap(ctx, gs, nowMs) {
+  if(nowMs === undefined) nowMs = Date.now();
   const W = 90, H = 90;
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = 'rgba(5,5,15,0.95)';
@@ -6122,7 +6383,7 @@ function drawMinimap(ctx, gs) {
     if(!s.alive || !s.isBoss) return;
     const mx = s.head.x * scale;
     const my = s.head.y * scale;
-    const blink = Math.floor(Date.now() / 300) % 2 === 0;
+    const blink = Math.floor(nowMs / 300) % 2 === 0;
     ctx.beginPath();
     ctx.arc(mx, my, blink ? 6 : 4, 0, Math.PI*2);
     ctx.fillStyle = blink ? '#ff6600' : '#ff3300';
@@ -6446,44 +6707,72 @@ function initBgParticles() {
 }
 initBgParticles();
 
+// ── OBJECT POOLS — zéro alloc pendant le jeu, zéro GC pressure ──
+// Chaque pool pré-alloue des objets réutilisés via swap-and-recycle.
+const _poolCF  = []; // collectFlashes pool
+const _poolTP  = []; // trailParticles pool
+const _poolDE  = []; // deathExplosions pool
+const _poolPAR = []; // particles pool (avec trail)
+
 // Orbe de collecte (flash quand on mange une nourriture)
 let collectFlashes = [];
 function addCollectFlash(x, y, color='#ffd700') {
-  collectFlashes.push({ x, y, color, r:0, maxR:30, alpha:1, t:0 });
+  const f = _poolCF.pop() || { x:0, y:0, color:'', r:0, maxR:30, alpha:0 };
+  f.x=x; f.y=y; f.color=color; f.r=0; f.alpha=1;
+  collectFlashes.push(f);
 }
 
 // Sillage du serpent (trail amélioré)
 let trailParticles = [];
 function addTrailParticle(x, y, color) {
-  if (trailParticles.length >= 200) { trailParticles[0]=trailParticles[trailParticles.length-1]; trailParticles.pop(); }
-  trailParticles.push({ x, y, color, r: Math.random()*3+1, alpha:0.6, vx:(Math.random()-0.5)*0.5, vy:(Math.random()-0.5)*0.5 });
+  if (trailParticles.length >= 200) {
+    // Recycler le plus vieux au lieu de créer un objet neuf
+    const old = trailParticles[0];
+    trailParticles[0] = trailParticles[trailParticles.length-1]; trailParticles.pop();
+    old.x=x; old.y=y; old.color=color; old.r=Math.random()*3+1;
+    old.alpha=0.6; old.vx=(Math.random()-0.5)*0.5; old.vy=(Math.random()-0.5)*0.5;
+    trailParticles.push(old); return;
+  }
+  const p = _poolTP.pop() || { x:0, y:0, color:'', r:1, alpha:0, vx:0, vy:0 };
+  p.x=x; p.y=y; p.color=color; p.r=Math.random()*3+1;
+  p.alpha=0.6; p.vx=(Math.random()-0.5)*0.5; p.vy=(Math.random()-0.5)*0.5;
+  trailParticles.push(p);
 }
 
 // Explosion de mort
 let deathExplosions = [];
+function _getDE() {
+  const p = _poolDE.pop();
+  if(p) { p.isRing=false; p.gravity=undefined; p.spin=undefined; return p; }
+  return { x:0,y:0,vx:0,vy:0,r:0,alpha:0,color:'',isRing:false,ringR:0,ringMax:0 };
+}
 function addDeathExplosion(x, y, snakeColor) {
-  // Limiter le total pour éviter les lags
-  if(deathExplosions.length > 100) deathExplosions.splice(0, 30);
+  if(deathExplosions.length > 100) {
+    // Recycler les plus vieux au lieu de splice (splice = alloc interne)
+    for(let _di=0; _di<30; _di++) { const dead=deathExplosions.shift(); if(dead) _poolDE.push(dead); }
+  }
 
   const colors = snakeColor
     ? [snakeColor, '#ffffff', '#ffd700', '#ff006e']
     : ['#ff006e','#ff4400','#ffd700','#ffffff','#ff69b4'];
 
   // Anneau d'onde de choc
-  deathExplosions.push({ x, y, vx:0, vy:0, r:8, alpha:1, color:'#ffffff', isRing:true, ringR:8, ringMax:120 });
+  const _ring = _getDE();
+  _ring.x=x; _ring.y=y; _ring.vx=0; _ring.vy=0; _ring.r=8; _ring.alpha=1;
+  _ring.color='#ffffff'; _ring.isRing=true; _ring.ringR=8; _ring.ringMax=120;
+  deathExplosions.push(_ring);
 
-  // Éclats primaires — 20 sur mobile, 30 sur desktop
+  // Éclats primaires — 15 sur mobile, 30 sur desktop
   const count = IS_MOBILE ? 15 : 30;
   for(let i=0;i<count;i++) {
     const angle = Math.random()*Math.PI*2;
     const speed = Math.random()*7+2;
-    deathExplosions.push({
-      x, y,
-      vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed,
-      r:Math.random()*5+2, alpha:1,
-      color:colors[Math.floor(Math.random()*colors.length)],
-      spin:Math.random()*0.3-0.15
-    });
+    const _e = _getDE();
+    _e.x=x; _e.y=y; _e.vx=Math.cos(angle)*speed; _e.vy=Math.sin(angle)*speed;
+    _e.r=Math.random()*5+2; _e.alpha=1;
+    _e.color=colors[Math.floor(Math.random()*colors.length)];
+    _e.spin=Math.random()*0.3-0.15;
+    deathExplosions.push(_e);
   }
 
   // Débris lents (nourriture qui tombe)
@@ -6491,13 +6780,13 @@ function addDeathExplosion(x, y, snakeColor) {
   for(let i=0;i<debrisCount;i++) {
     const angle = Math.random()*Math.PI*2;
     const speed = Math.random()*2+0.5;
-    deathExplosions.push({
-      x:x+(Math.random()-0.5)*40, y:y+(Math.random()-0.5)*40,
-      vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed - 1,
-      r:Math.random()*3+1, alpha:0.9,
-      color:colors[Math.floor(Math.random()*colors.length)],
-      gravity:0.15
-    });
+    const _d = _getDE();
+    _d.x=x+(Math.random()-0.5)*40; _d.y=y+(Math.random()-0.5)*40;
+    _d.vx=Math.cos(angle)*speed; _d.vy=Math.sin(angle)*speed-1;
+    _d.r=Math.random()*3+1; _d.alpha=0.9;
+    _d.color=colors[Math.floor(Math.random()*colors.length)];
+    _d.gravity=0.15;
+    deathExplosions.push(_d);
   }
 }
 
@@ -6523,7 +6812,7 @@ function drawVisualEffects(ctx, camX, camY, nowMs) {
   for(let i = trailParticles.length - 1; i >= 0; i--) {
     const p = trailParticles[i];
     p.x += p.vx; p.y += p.vy; p.alpha -= 0.025;
-    if (p.alpha <= 0) { trailParticles[i]=trailParticles[trailParticles.length-1]; trailParticles.pop(); continue; }
+    if (p.alpha <= 0) { const _dead=trailParticles[i]; trailParticles[i]=trailParticles[trailParticles.length-1]; trailParticles.pop(); _poolTP.push(_dead); continue; }
     ctx.globalAlpha = p.alpha;
     ctx.fillStyle = p.color;
     ctx.beginPath();
@@ -6536,7 +6825,7 @@ function drawVisualEffects(ctx, camX, camY, nowMs) {
   for(let i = collectFlashes.length - 1; i >= 0; i--) {
     const f = collectFlashes[i];
     f.r += 2; f.alpha -= 0.08;
-    if (f.alpha <= 0) { collectFlashes[i]=collectFlashes[collectFlashes.length-1]; collectFlashes.pop(); continue; }
+    if (f.alpha <= 0) { const _dead=collectFlashes[i]; collectFlashes[i]=collectFlashes[collectFlashes.length-1]; collectFlashes.pop(); _poolCF.push(_dead); continue; }
     ctx.globalAlpha = f.alpha;
     ctx.strokeStyle = f.color;
     ctx.lineWidth = 2;
@@ -6552,7 +6841,7 @@ function drawVisualEffects(ctx, camX, camY, nowMs) {
     if(p.isRing) {
       // Onde de choc circulaire
       p.ringR += 6; p.alpha -= 0.05;
-      if(p.alpha <= 0) { deathExplosions[i]=deathExplosions[deathExplosions.length-1]; deathExplosions.pop(); continue; }
+      if(p.alpha <= 0) { const _d=deathExplosions[i]; deathExplosions[i]=deathExplosions[deathExplosions.length-1]; deathExplosions.pop(); _poolDE.push(_d); continue; }
       ctx.globalAlpha = p.alpha * 0.6;
       ctx.strokeStyle = p.color;
       ctx.lineWidth = 3;
@@ -6567,7 +6856,7 @@ function drawVisualEffects(ctx, camX, camY, nowMs) {
     p.vy += (p.gravity || 0.08);
     p.vx *= 0.97; p.vy *= 0.97;
     p.alpha -= 0.03; p.r -= 0.04;
-    if(p.alpha <= 0 || p.r <= 0) { deathExplosions[i]=deathExplosions[deathExplosions.length-1]; deathExplosions.pop(); continue; }
+    if(p.alpha <= 0 || p.r <= 0) { const _d=deathExplosions[i]; deathExplosions[i]=deathExplosions[deathExplosions.length-1]; deathExplosions.pop(); _poolDE.push(_d); continue; }
     ctx.globalAlpha = p.alpha;
     ctx.fillStyle = p.color;
     if(GLOW_ON) { ctx.shadowColor = p.color; ctx.shadowBlur = 6; }

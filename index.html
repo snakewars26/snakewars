@@ -3224,7 +3224,10 @@ function getBRTimeLeft() {
   return _brTimeCached;
 }
 
-function drawBattleRoyaleZone(ctx, camX, camY) {
+function drawBattleRoyaleZone(ctx, camX, camY, nowMs) {
+  // FIX ECRAN NOIR : nowMs était absent (non passé en param) → Math.sin(undefined) = NaN
+  // → ctx.globalAlpha = NaN → sur Android Chrome, bloque le rendu → canvas noir ~1-2s
+  if(!isFinite(nowMs)) nowMs = Date.now();
   if(!brActive) return;
   const sx = brZoneCX - camX, sy = brZoneCY - camY;
   const isShrinking = brShrinkTimer < 0;
@@ -3242,7 +3245,8 @@ function drawBattleRoyaleZone(ctx, camX, camY) {
   ctx.shadowBlur = isShrinking ? 30 : 15;
   // Légère pulsation douce si rétrécissement imminent (pas de clignotement agressif)
   if(!isShrinking && nextShrink < 10) {
-    ctx.globalAlpha = 0.75 + 0.25 * Math.sin(nowMs * 0.003);
+    const _pulse = 0.75 + 0.25 * Math.sin(nowMs * 0.003);
+    ctx.globalAlpha = isFinite(_pulse) ? _pulse : 1; // double guard : jamais NaN même si nowMs corrompu
   }
   ctx.setLineDash([15,8]);
   ctx.beginPath();
@@ -6048,7 +6052,7 @@ function gameLoop(timestamp = 0) {
   drawNeonGrid(ctx, renderCam.x, renderCam.y, canvas.width, canvas.height, timestamp);
 
   // Effets de fond (particules flottantes)
-  drawBattleRoyaleZone(ctx, renderCam.x, renderCam.y);
+  drawBattleRoyaleZone(ctx, renderCam.x, renderCam.y, timestamp);
   drawVisualEffects(ctx, renderCam.x, renderCam.y, timestamp);
 
   // Draw zones

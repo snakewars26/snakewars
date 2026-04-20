@@ -29,8 +29,8 @@
 <!-- Navigateurs compatibles : Chrome, Firefox, Safari, Edge (Android, iOS, Windows, Mac) -->
 <!-- Contrôles : Souris/tactile glissé (PC/Mobile) · Clavier AZERTY/QWERTY (PC) -->
 
-<title>SnakeWars.io — Jeu de Serpent Battle Royale Multijoueur Gratuit</title>
-<meta name="description" content="Jouez à SnakeWars.io, le jeu de serpent Battle Royale multijoueur en ligne ! Affrontez des joueurs du monde entier, débloquez des skins, grimpez dans les classements. 100% gratuit sur navigateur.">
+<title>SnakeWars.io — Battle Royale Multijoueur Gratuit</title>
+<meta name="description" content="SnakeWars.io — jeu de serpent Battle Royale multijoueur gratuit. 100 joueurs, skins, skills et classements. Sans inscription, 100% navigateur.">
 <meta name="keywords" content="snake wars, jeu serpent multijoueur, snake battle royale, snakewars io, jeu serpent gratuit, snake io">
 <meta name="author" content="Herve Caporale - hervecaporale17@gmail.com">
 <meta name="robots" content="index, follow">
@@ -99,7 +99,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
   align-items:center;width:min(360px,92vw);gap:.45rem;margin:0 auto;
   padding: 1rem 0 1rem;flex:1;}
 
-.logo{font-family:'Orbitron',monospace;font-weight:900;font-size:clamp(2.2rem,9vw,3.2rem);
+.logo,h1.logo{font-family:'Orbitron',monospace;font-weight:900;font-size:clamp(2.2rem,9vw,3.2rem);
   letter-spacing:.1em;background:linear-gradient(135deg,#00f5ff 0%,#39ff14 40%,#ffd700 72%,#ff006e 100%);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
   filter:drop-shadow(0 0 18px rgba(0,245,255,.5));animation:lp 3s ease-in-out infinite}
@@ -400,7 +400,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
 
   <!-- ── EN-TÊTE : LOGO + COINS ── -->
   <div class="m-header">
-    <div class="logo">SNAKEWARS</div>
+    <h1 class="logo">SNAKEWARS</h1>
     <div class="logo-sub">⚡ BATTLE ROYALE ⚡</div>
     <!-- COINS affiché juste en dessous du logo -->
     <div id="serverBadge" style="margin-top:.4rem;display:flex;align-items:center;gap:.4rem;background:rgba(0,245,255,.06);border:1px solid rgba(0,245,255,.2);border-radius:8px;padding:.28rem .75rem;font-family:'Orbitron',monospace;font-size:.42rem;color:rgba(0,245,255,.7);letter-spacing:.08em;">
@@ -474,10 +474,21 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
       <!-- push() appelé via initAds() après consentement RGPD uniquement -->
     </div>
 
+    <!-- Navigation interne SEO -->
+    <nav style="width:100%;padding:.5rem 0 .3rem;display:flex;flex-wrap:wrap;gap:.35rem;justify-content:center;" aria-label="Sections">
+      <a href="#comment-jouer" style="font-size:.5rem;color:rgba(0,212,255,.7);text-decoration:none;background:rgba(0,212,255,.07);border:1px solid rgba(0,212,255,.18);border-radius:20px;padding:.25rem .6rem;">🐍 Jouer</a>
+      <a href="#zones-map" style="font-size:.5rem;color:rgba(255,0,110,.7);text-decoration:none;background:rgba(255,0,110,.07);border:1px solid rgba(255,0,110,.18);border-radius:20px;padding:.25rem .6rem;">🗺️ Zones</a>
+      <a href="#skills" style="font-size:.5rem;color:rgba(57,255,20,.7);text-decoration:none;background:rgba(57,255,20,.07);border:1px solid rgba(57,255,20,.18);border-radius:20px;padding:.25rem .6rem;">⚡ Skills</a>
+      <a href="#skins" style="font-size:.5rem;color:rgba(255,215,0,.7);text-decoration:none;background:rgba(255,215,0,.07);border:1px solid rgba(255,215,0,.18);border-radius:20px;padding:.25rem .6rem;">🎨 Skins</a>
+      <a href="#strategies" style="font-size:.5rem;color:rgba(57,255,20,.7);text-decoration:none;background:rgba(57,255,20,.07);border:1px solid rgba(57,255,20,.18);border-radius:20px;padding:.25rem .6rem;">🏆 Stratégies</a>
+      <a href="#faq" style="font-size:.5rem;color:rgba(0,212,255,.7);text-decoration:none;background:rgba(0,212,255,.07);border:1px solid rgba(0,212,255,.18);border-radius:20px;padding:.25rem .6rem;">❓ FAQ</a>
+      <a href="#coins" style="font-size:.5rem;color:rgba(255,215,0,.7);text-decoration:none;background:rgba(255,215,0,.07);border:1px solid rgba(255,215,0,.18);border-radius:20px;padding:.25rem .6rem;">🪙 Coins</a>
+    </nav>
+
     <!-- Gameplay -->
     <div class="seo-blk" style="background:rgba(0,212,255,.04);border:1px solid rgba(0,212,255,.12);">
-      <h2>🐍 Comment jouer à SnakeWars.io ?</h2>
-      <p><strong>SnakeWars.io</strong> est un jeu de serpent Battle Royale jouable directement dans ton navigateur, sans installation ni inscription. Jusqu'à <strong>100 joueurs</strong> s'affrontent sur une carte qui rétrécit progressivement. Mange des orbes lumineux pour grandir, coupe la route de tes adversaires pour les éliminer. Reste dans la zone safe — le <strong>dernier serpent en vie</strong> gagne. Pas de respawn : chaque vie compte !</p>
+      <h2 id="comment-jouer">🐍 Comment jouer à SnakeWars.io ?</h2>
+      <p>SnakeWars.io est un jeu de serpent Battle Royale jouable directement dans ton navigateur, sans installation ni inscription. Jusqu'à <strong>100 joueurs</strong> s'affrontent sur une carte qui rétrécit progressivement. Mange des orbes lumineux pour grandir, coupe la route de tes adversaires pour les éliminer. Reste dans la zone safe — le <strong>dernier serpent en vie</strong> gagne. Pas de respawn : chaque vie compte !</p>
       <p style="margin-top:.6rem;">Sur <strong>mobile</strong> : glisse sur l'écran pour diriger · bouton BOOST pour accélérer · boutons Skills au centre. Sur <strong>PC</strong> : souris pour diriger · clic gauche ou Espace = BOOST · A/Q · Z/W · E pour les skills.</p>
     </div>
 
@@ -492,7 +503,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
 
     <!-- Les 6 zones -->
     <div class="seo-blk" style="background:rgba(255,0,110,.04);border:1px solid rgba(255,0,110,.12);">
-      <h2 style="color:#ff006e;">🗺️ Les 6 Zones de la Map</h2>
+      <h2 id="zones-map" style="color:#ff006e;">🗺️ Les 6 Zones de la Map</h2>
       <p>⚡ <strong style="color:#00f5ff;">ZONE TURBO</strong> — +40% de vitesse tant que tu y restes. Idéale pour fuir ou foncer.</p>
       <p style="margin-top:.45rem;">☠️ <strong style="color:#ff006e;">ZONE DANGER</strong> — Draine ton énergie progressivement. À éviter !</p>
       <p style="margin-top:.45rem;">🪙 <strong style="color:#ffd700;">ZONE COINS</strong> — Chaque orbe mangé rapporte +1 coin bonus. Parfaite pour farmer.</p>
@@ -503,20 +514,20 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
 
     <!-- Les 8 skills -->
     <div class="seo-blk" style="background:rgba(0,255,100,.04);border:1px solid rgba(0,255,100,.12);">
-      <h2 style="color:#39ff14;">⚡ Les 8 Skills — Construis ton Build</h2>
-      <p>🛡️ <strong style="color:#00d4ff;">BOUCLIER</strong> <span style="color:rgba(255,255,255,.35);font-size:.65em;">(Gratuit · CD 15s)</span> — Invincible 3s. Traverse les ennemis sans mourir.</p>
-      <p style="margin-top:.4rem;">🧲 <strong style="color:#ffd700;">AIMANT</strong> <span style="color:rgba(255,255,255,.35);font-size:.65em;">(Gratuit · CD 20s)</span> — Attire tous les orbes proches pendant 5s.</p>
-      <p style="margin-top:.4rem;">🚀 <strong style="color:#ff8800;">TURBO</strong> <span style="color:rgba(255,255,255,.35);font-size:.65em;">(Gratuit · CD 18s)</span> — Vitesse x2 pendant 4s sans perdre de longueur.</p>
-      <p style="margin-top:.4rem;">💣 <strong style="color:#ff006e;">BOMBE</strong> <span style="color:rgba(255,255,255,.35);font-size:.65em;">(Gratuit · CD 30s)</span> — Élimine tous les ennemis dans un rayon de 200px.</p>
-      <p style="margin-top:.4rem;">👻 <strong style="color:#bf00ff;">FANTÔME</strong> <span style="color:rgba(255,255,255,.35);font-size:.65em;">(300🪙 · CD 25s)</span> — Traverse les murs et bords de map pendant 5s.</p>
-      <p style="margin-top:.4rem;">⚡ <strong style="color:#ffd700;">SURCHARGE</strong> <span style="color:rgba(255,255,255,.35);font-size:.65em;">(400🪙 · CD 40s)</span> — Score x2 pendant 10s.</p>
-      <p style="margin-top:.4rem;">🌀 <strong style="color:#00d4ff;">TÉLÉPORT</strong> <span style="color:rgba(255,255,255,.35);font-size:.65em;">(350🪙 · CD 22s)</span> — Propulsé 200px en avant instantanément.</p>
-      <p style="margin-top:.4rem;">☠️ <strong style="color:#39ff14;">VIRUS</strong> <span style="color:rgba(255,255,255,.35);font-size:.65em;">(450🪙 · CD 35s)</span> — Ralentit tous les ennemis proches pendant 5s.</p>
+      <h2 id="skills" style="color:#39ff14;">⚡ Les 8 Skills — Construis ton Build</h2>
+      <p>🛡️ <span style="color:#00d4ff;font-weight:700;">BOUCLIER</span> <span style="color:rgba(255,255,255,.35);font-size:.65em;">(Gratuit · CD 15s)</span> — Invincible 3s. Traverse les ennemis sans mourir.</p>
+      <p style="margin-top:.4rem;">🧲 <span style="color:#ffd700;font-weight:700;">AIMANT</span> <span style="color:rgba(255,255,255,.35);font-size:.65em;">(Gratuit · CD 20s)</span> — Attire tous les orbes proches pendant 5s.</p>
+      <p style="margin-top:.4rem;">🚀 <span style="color:#ff8800;font-weight:700;">TURBO</span> <span style="color:rgba(255,255,255,.35);font-size:.65em;">(Gratuit · CD 18s)</span> — Vitesse x2 pendant 4s sans perdre de longueur.</p>
+      <p style="margin-top:.4rem;">💣 <span style="color:#ff006e;font-weight:700;">BOMBE</span> <span style="color:rgba(255,255,255,.35);font-size:.65em;">(Gratuit · CD 30s)</span> — Élimine tous les ennemis dans un rayon de 200px.</p>
+      <p style="margin-top:.4rem;">👻 <span style="color:#bf00ff;font-weight:700;">FANTÔME</span> <span style="color:rgba(255,255,255,.35);font-size:.65em;">(300🪙 · CD 25s)</span> — Traverse les murs et bords de map pendant 5s.</p>
+      <p style="margin-top:.4rem;">⚡ <span style="color:#ffd700;font-weight:700;">SURCHARGE</span> <span style="color:rgba(255,255,255,.35);font-size:.65em;">(400🪙 · CD 40s)</span> — Score x2 pendant 10s.</p>
+      <p style="margin-top:.4rem;">🌀 <span style="color:#00d4ff;font-weight:700;">TÉLÉPORT</span> <span style="color:rgba(255,255,255,.35);font-size:.65em;">(350🪙 · CD 22s)</span> — Propulsé 200px en avant instantanément.</p>
+      <p style="margin-top:.4rem;">☠️ <span style="color:#39ff14;font-weight:700;">VIRUS</span> <span style="color:rgba(255,255,255,.35);font-size:.65em;">(450🪙 · CD 35s)</span> — Ralentit tous les ennemis proches pendant 5s.</p>
     </div>
 
     <!-- Skins & Accessoires -->
     <div class="seo-blk" style="background:rgba(255,215,0,.04);border:1px solid rgba(255,215,0,.12);">
-      <h2 style="color:#ffd700;">🎨 Skins &amp; Accessoires</h2>
+      <h2 id="skins" style="color:#ffd700;">🎨 Skins &amp; Accessoires</h2>
       <p><strong>3 skins gratuits</strong> : <strong style="color:#00f5ff;">Néon</strong>, <strong style="color:#ff4400;">Feu</strong>, <strong style="color:#39ff14;">Vert</strong>.</p>
       <p style="margin-top:.45rem;"><strong>17 skins premium</strong> (500🪙/manche) : Or Brillant, Arc-en-ciel, Ombre Violette, Galaxy, Dragon, Cristal Glace, Toxic, Cyber, Sakura, Soleil Levant, Abyssal, Émeraude, Magma, Vague, Électrique, Prisme, Cosmique.</p>
       <p style="margin-top:.45rem;"><strong>12 skins pays</strong> (500🪙/manche) : 🇫🇷 France, 🇺🇸 USA, 🇬🇧 UK, 🇩🇪 Allemagne, 🇪🇸 Espagne, 🇧🇷 Brésil, 🇯🇵 Japon, 🇮🇹 Italie, 🇨🇦 Canada, 🇵🇹 Portugal, 🇲🇽 Mexique, 🇦🇷 Argentine.</p>
@@ -526,35 +537,35 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
 
     <!-- Stratégies -->
     <div class="seo-blk" style="background:rgba(57,255,20,.03);border:1px solid rgba(57,255,20,.1);">
-      <h2 style="color:#39ff14;">🏆 Stratégies pour Gagner</h2>
-      <p><strong>En début de partie</strong> — Farm tranquillement les orbes loin du centre. Évite les confrontations directes tant que tu es petit. La <strong>Zone Coins</strong> est idéale pour accumuler de la masse sans risque.</p>
-      <p style="margin-top:.5rem;"><strong>En milieu de partie</strong> — Utilise le <strong>Boost</strong> pour couper la route des adversaires. Positionne-toi en bordure de zone safe pour piéger les joueurs qui fuient. Active ton skill <strong>Bouclier</strong> avant d'engager.</p>
-      <p style="margin-top:.5rem;"><strong>En fin de partie</strong> — La <strong>Zone Soin</strong> est un avantage décisif quand il reste 5 joueurs. Garde ton skill <strong>Bombe</strong> ou <strong>Turbo</strong> pour le 1v1 final.</p>
-      <p style="margin-top:.5rem;"><strong>Astuce pro</strong> — Le skill <strong>Téléport</strong> + <strong>Turbo</strong> en combo te permet de traverser toute la map en 2 secondes. Parfait pour échapper à la zone et prendre tout le monde par surprise.</p>
+      <h2 id="strategies" style="color:#39ff14;">🏆 Stratégies pour Gagner</h2>
+      <p><strong>En début de partie</strong> — Farm tranquillement les orbes loin du centre. Évite les confrontations directes tant que tu es petit. La Zone Coins est idéale pour accumuler de la masse sans risque.</p>
+      <p style="margin-top:.5rem;"><strong>En milieu de partie</strong> — Utilise le Boost pour couper la route des adversaires. Positionne-toi en bordure de zone safe pour piéger les joueurs qui fuient. Active ton skill Bouclier avant d'engager.</p>
+      <p style="margin-top:.5rem;"><strong>En fin de partie</strong> — La Zone Soin est un avantage décisif quand il reste 5 joueurs. Garde ton skill Bombe ou Turbo pour le 1v1 final.</p>
+      <p style="margin-top:.5rem;"><strong>Astuce pro</strong> — Le skill Téléport + Turbo en combo te permet de traverser toute la map en 2 secondes. Parfait pour échapper à la zone et prendre tout le monde par surprise.</p>
     </div>
 
     <!-- FAQ -->
     <div class="seo-blk" style="background:rgba(0,212,255,.03);border:1px solid rgba(0,212,255,.1);">
-      <h2 style="color:#00d4ff;">❓ Questions Fréquentes</h2>
+      <h2 id="faq" style="color:#00d4ff;">❓ Questions Fréquentes</h2>
       <p><strong style="color:#fff;">SnakeWars.io est-il gratuit ?</strong><br>Oui, 100% gratuit sur navigateur. Les coins s'obtiennent en regardant des publicités. Aucun achat obligatoire.</p>
-      <p style="margin-top:.55rem;"><strong style="color:#fff;">Mes coins et skins sont-ils sauvegardés ?</strong><br>Sauvegardés dans le <strong>localStorage</strong> de ton navigateur. Vider le cache ou changer d'appareil les efface. Évite le mode navigation privée.</p>
-      <p style="margin-top:.55rem;"><strong style="color:#fff;">Peut-on jouer sur mobile ?</strong><br>Oui ! Glisse sur l'écran pour diriger, boutons Skills et Boost intégrés. Installe-le comme <strong>app PWA</strong> pour une expérience plein écran.</p>
+      <p style="margin-top:.55rem;"><strong style="color:#fff;">Mes coins et skins sont-ils sauvegardés ?</strong><br>Sauvegardés dans le localStorage de ton navigateur. Vider le cache ou changer d'appareil les efface. Évite le mode navigation privée.</p>
+      <p style="margin-top:.55rem;"><strong style="color:#fff;">Peut-on jouer sur mobile ?</strong><br>Oui ! Glisse sur l'écran pour diriger, boutons Skills et Boost intégrés. Installe-le comme app PWA pour une expérience plein écran.</p>
       <p style="margin-top:.55rem;"><strong style="color:#fff;">Combien de temps dure une partie ?</strong><br>Entre 2 et 5 minutes selon ta survie. La zone rétrécit rapidement, ce qui force les confrontations et accélère la fin de partie.</p>
     </div>
 
     <!-- Coins -->
     <div class="seo-blk" style="background:rgba(255,215,0,.03);border:1px solid rgba(255,215,0,.1);">
-      <h2 style="color:#ffd700;">🪙 Système de Coins &amp; Récompenses</h2>
-      <p>Les <strong>coins</strong> permettent d'équiper des <strong>skins</strong> (500🪙/manche), des <strong>accessoires</strong> (250🪙/manche) et des <strong>skills payants</strong> (300–450🪙).</p>
-      <p style="margin-top:.5rem;"><strong>Comment en gagner :</strong> Regarde une pub pour recevoir <strong>+500 coins</strong> instantanément. Plus tu joues, plus tu accumules.</p>
+      <h2 id="coins" style="color:#ffd700;">🪙 Système de Coins &amp; Récompenses</h2>
+      <p>Les coins permettent d'équiper des skins (500🪙/manche), des accessoires (250🪙/manche) et des skills payants (300–450🪙).</p>
+      <p style="margin-top:.5rem;"><strong>Comment en gagner :</strong> Regarde une pub pour recevoir +500 coins instantanément. Plus tu joues, plus tu accumules.</p>
       <p style="margin-top:.5rem;"><strong>Exemple de progression :</strong> 3 pubs regardées = 1500🪙 = 1 skin payant pour 3 manches + 1 accessoire. Optimise ta combinaison skin/skill selon ton style de jeu.</p>
     </div>
 
     <!-- Pourquoi SnakeWars -->
     <div class="seo-blk" style="background:rgba(255,0,110,.03);border:1px solid rgba(255,0,110,.1);">
       <h2 style="color:#ff006e;">🐍 Pourquoi SnakeWars.io ?</h2>
-      <p>SnakeWars.io réinvente le classique jeu de serpent en y intégrant les mécaniques du <strong>Battle Royale</strong> : zone qui rétrécit, 100 joueurs, pas de respawn, kills comptabilisés. Chaque partie est unique, intense, et se termine en moins de 5 minutes.</p>
-      <p style="margin-top:.5rem;">Contrairement aux .io classiques, SnakeWars propose un vrai <strong>système de build</strong> avec 8 skills à combiner, des <strong>zones spéciales</strong> qui changent le gameplay, et une <strong>progression cosmétique</strong> complète — sans compte, sans inscription, directement dans le navigateur.</p>
+      <p>SnakeWars.io réinvente le classique jeu de serpent en y intégrant les mécaniques du Battle Royale : zone qui rétrécit, 100 joueurs, pas de respawn, kills comptabilisés. Chaque partie est unique, intense, et se termine en moins de 5 minutes.</p>
+      <p style="margin-top:.5rem;">Contrairement aux .io classiques, SnakeWars propose un vrai système de build avec 8 skills à combiner, des zones spéciales qui changent le gameplay, et une progression cosmétique complète — sans compte, sans inscription, directement dans le navigateur.</p>
     </div>
 
     <!-- Compatibilité -->
@@ -738,7 +749,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
   <div class="leg-w">
     <div class="leg-t">🐍 À PROPOS</div>
     <div class="leg-b">
-      <p><strong>SnakeWars.io</strong> est un jeu de serpent Battle Royale jouable directement dans ton navigateur, sans installation ni inscription.</p>
+      <p>SnakeWars.io est un jeu de serpent Battle Royale jouable directement dans ton navigateur, sans installation ni inscription.</p>
       <h3>GAMEPLAY</h3>
       <p>Jusqu'à 100 joueurs s'affrontent sur une carte qui rétrécit progressivement (mode Battle Royale). Mange des orbes pour grandir, élimine tes adversaires en leur faisant toucher ton corps. Reste dans la zone safe — le dernier serpent en vie gagne. Pas de respawn : chaque vie compte !</p>
       <h3>LES 6 ZONES DE LA MAP</h3>
@@ -752,29 +763,29 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:
       </p>
       <h3>LES 8 SKILLS</h3>
       <p>
-        🛡️ <strong>BOUCLIER</strong> (Gratuit · CD 15s) — Invincible 3s. Traverse les ennemis sans mourir.<br>
-        🧲 <strong>AIMANT</strong> (Gratuit · CD 20s) — Attire tous les orbes proches pendant 5s.<br>
-        🚀 <strong>TURBO</strong> (Gratuit · CD 18s) — Vitesse x2 pendant 4s sans perdre de longueur.<br>
-        💣 <strong>BOMBE</strong> (Gratuit · CD 30s) — Élimine tous les ennemis dans 200px.<br>
-        👻 <strong>FANTÔME</strong> (300🪙 · CD 25s) — Traverse les murs et bords de map pendant 5s.<br>
-        ⚡ <strong>SURCHARGE</strong> (400🪙 · CD 40s) — Score x2 pendant 10s.<br>
-        🌀 <strong>TÉLÉPORT</strong> (350🪙 · CD 22s) — Propulsé 200px en avant instantanément.<br>
-        ☠️ <strong>VIRUS</strong> (450🪙 · CD 35s) — Ralentit tous les ennemis proches 5s.
+        🛡️ <span style="color:#00d4ff;font-weight:700;">BOUCLIER</span> (Gratuit · CD 15s) — Invincible 3s. Traverse les ennemis sans mourir.<br>
+        🧲 <span style="color:#ffd700;font-weight:700;">AIMANT</span> (Gratuit · CD 20s) — Attire tous les orbes proches pendant 5s.<br>
+        🚀 <span style="color:#ff8800;font-weight:700;">TURBO</span> (Gratuit · CD 18s) — Vitesse x2 pendant 4s sans perdre de longueur.<br>
+        💣 <span style="color:#ff006e;font-weight:700;">BOMBE</span> (Gratuit · CD 30s) — Élimine tous les ennemis dans 200px.<br>
+        👻 <span style="color:#bf00ff;font-weight:700;">FANTÔME</span> (300🪙 · CD 25s) — Traverse les murs et bords de map pendant 5s.<br>
+        ⚡ <span style="color:#ffd700;font-weight:700;">SURCHARGE</span> (400🪙 · CD 40s) — Score x2 pendant 10s.<br>
+        🌀 <span style="color:#00d4ff;font-weight:700;">TÉLÉPORT</span> (350🪙 · CD 22s) — Propulsé 200px en avant instantanément.<br>
+        ☠️ <span style="color:#39ff14;font-weight:700;">VIRUS</span> (450🪙 · CD 35s) — Ralentit tous les ennemis proches 5s.
       </p>
       <h3>CONTRÔLES PC (Souris &amp; Clavier)</h3>
       <p>
-        🖱️ <strong>Souris</strong> — déplace la souris pour diriger ton serpent<br>
-        🖱️ <strong>Clic gauche maintenu</strong> — BOOST (accélération, perd de la longueur)<br>
-        ⌨️ <strong>Espace</strong> — BOOST (alternative clavier)<br>
-        ⌨️ <strong>A / Q</strong> — Activer le Skill 1<br>
-        ⌨️ <strong>Z / W</strong> — Activer le Skill 2<br>
-        ⌨️ <strong>E</strong> — Activer le Skill 3
+        🖱️ Souris — déplace la souris pour diriger ton serpent<br>
+        🖱️ Clic gauche maintenu — BOOST (accélération, perd de la longueur)<br>
+        ⌨️ Espace — BOOST (alternative clavier)<br>
+        ⌨️ A / Q — Activer le Skill 1<br>
+        ⌨️ Z / W — Activer le Skill 2<br>
+        ⌨️ E — Activer le Skill 3
       </p>
       <h3>CONTRÔLES MOBILE (Tactile)</h3>
       <p>
-        👆 <strong>Glisse sur l'écran</strong> — glisse ton doigt pour diriger ton serpent<br>
-        ⚡ <strong>Bouton BOOST</strong> (bas à gauche) — maintiens pour accélérer<br>
-        🛡️ <strong>Boutons Skills</strong> (bas, au centre) — appuie pour activer tes skills équipés
+        👆 Glisse sur l'écran — glisse ton doigt pour diriger ton serpent<br>
+        ⚡ Bouton BOOST (bas à gauche) — maintiens pour accélérer<br>
+        🛡️ Boutons Skills (bas, au centre) — appuie pour activer tes skills équipés
       </p>
       <h3>PLATEFORMES SUPPORTÉES</h3>
       <p>✅ Android (Chrome, Firefox, Edge) · ✅ iOS (Safari, Chrome) · ✅ Windows (Chrome, Firefox, Edge) · ✅ Mac (Safari, Chrome) · Aucun plugin requis — 100% navigateur.</p>

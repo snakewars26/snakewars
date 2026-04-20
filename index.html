@@ -2750,7 +2750,10 @@ function updateWeather(gs, dt=1) { // #2 FIX: dt-aware
   if(weatherTimer <= 0) {
     currentWeather = WEATHERS[Math.floor(Math.random()*WEATHERS.length)];
     weatherTimer = currentWeather.duration;
-    showNotif(`${currentWeather.icon} MÉTÉO : ${currentWeather.name.toUpperCase()} !`);
+    // setTimeout 0 : pousse la notif DOM HORS du frame rAF courant
+    // → évite le spike de dt sur le frame suivant (DOM reflow pendant rAF = lag Android)
+    const _wIcon = currentWeather.icon, _wName = currentWeather.name;
+    setTimeout(() => showNotif(`${_wIcon} MÉTÉO : ${_wName.toUpperCase()} !`), 0);
     if(currentWeather.id === 'rain') {
       rainDrops = Array.from({length:80}, () => ({
         x: Math.random()*canvas.width, y: Math.random()*canvas.height,
@@ -3704,6 +3707,9 @@ class Snake {
     const _head0 = this.path[0];
     const _newX = _head0.x + Math.cos(this.angle) * spd * dt;
     const _newY = _head0.y + Math.sin(this.angle) * spd * dt;
+
+    // Guard NaN : si spd ou dt corrompus, on ne bouge pas plutôt que de crasher la caméra
+    if(!isFinite(_newX) || !isFinite(_newY)) return;
 
     const ghost = (typeof _frameHasWallGhost !== 'undefined' ? _frameHasWallGhost : hasStat('wallGhost')) || this.wallGhostTimer > 0;
     let _resolvedX = _newX, _resolvedY = _newY;
@@ -5977,8 +5983,11 @@ function gameLoop(timestamp = 0) {
   const rawCam = p.alive ? p.head : (gs.lastCam || { x: WORLD/2, y: WORLD/2 });
   const halfW = canvas.width  * 0.5;
   const halfH = canvas.height * 0.5;
-  const targetCamX = Math.max(halfW, Math.min(WORLD - halfW, rawCam.x));
-  const targetCamY = Math.max(halfH, Math.min(WORLD - halfH, rawCam.y));
+  // Guard NaN : si path[0] est corrompu (spike de dt au changement météo, etc.) on garde lastCam
+  const _rcx = (rawCam && isFinite(rawCam.x)) ? rawCam.x : (gs.lastCam ? gs.lastCam.x : WORLD/2);
+  const _rcy = (rawCam && isFinite(rawCam.y)) ? rawCam.y : (gs.lastCam ? gs.lastCam.y : WORLD/2);
+  const targetCamX = Math.max(halfW, Math.min(WORLD - halfW, _rcx));
+  const targetCamY = Math.max(halfH, Math.min(WORLD - halfH, _rcy));
   const camLerp = p.alive && p.boosting ? 0.08 : 0.12;
   if (!gs.lastCam) gs.lastCam = { x: targetCamX, y: targetCamY };
   else {
@@ -5986,6 +5995,11 @@ function gameLoop(timestamp = 0) {
     const _cl = Math.min(camLerp * dt, 1.0);
     gs.lastCam.x += (targetCamX - gs.lastCam.x) * _cl;
     gs.lastCam.y += (targetCamY - gs.lastCam.y) * _cl;
+    // Si malgré tout lastCam devient NaN (corruption), on snap directement sur target
+    if(!isFinite(gs.lastCam.x) || !isFinite(gs.lastCam.y)) {
+      gs.lastCam.x = targetCamX;
+      gs.lastCam.y = targetCamY;
+    }
   }
 
   // (wall collision now handled directly inside snake.update())

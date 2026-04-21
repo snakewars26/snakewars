@@ -3,14 +3,7 @@
 <head>
 <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'unsafe-inline' https://cdn.ably.com https://www.googletagmanager.com https://pagead2.googlesyndication.com https://www.google-analytics.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.ably.io wss://*.ably.io https://realtime.ably.com wss://realtime.ably.com https://ipapi.co https://pagead2.googlesyndication.com https://www.google-analytics.com; frame-src https://googleads.g.doubleclick.net https://tpc.googlesyndication.com; object-src 'none';">
-<script>
-(function(){
-  const m={"name":"SnakeWars.io \u2014 Battle Royale","short_name":"SnakeWars","description":"Jeu de serpent Battle Royale multijoueur. 100 joueurs, sans inscription, 100% gratuit.","start_url":"./index.html","display":"standalone","orientation":"portrait","background_color":"#050810","theme_color":"#00f5ff","lang":"fr","scope":"./","categories":["games","entertainment"],"icons":[{"src":"icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},{"src":"icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}],"screenshots":[{"src":"preview.png","sizes":"1200x630","type":"image/png","label":"SnakeWars Battle Royale"}],"shortcuts":[{"name":"Jouer maintenant","short_name":"Jouer","description":"Lancer une partie Battle Royale","url":"./index.html","icons":[{"src":"icon-192.png","sizes":"192x192"}]}]};
-  const b=new Blob([JSON.stringify(m)],{type:'application/manifest+json'});
-  const l=document.createElement('link');l.rel='manifest';l.href=URL.createObjectURL(b);
-  document.currentScript.parentNode.insertBefore(l,document.currentScript);
-})();
-</script>
+<link rel="manifest" href="./manifest.json">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <meta name="theme-color" content="#050810">
 <!-- Manifest inline — PWA sans fichier externe -->
@@ -71,7 +64,12 @@
   gtag('set', 'url_passthrough', true);
 </script>
 
-<!-- GA4 chargé uniquement après consentement RGPD via initAnalytics() — ne pas dupliquer ici -->
+<!-- GA4 — chargé dès le départ avec Consent Mode v2 actif (RGPD conforme) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-0CKY7KKZY9"></script>
+<script>
+  gtag('js', new Date());
+  gtag('config', 'G-0CKY7KKZY9', {anonymize_ip: true, send_page_view: true});
+</script>
 <!-- AdSense chargé après consentement RGPD via initAds() — ne pas dupliquer ici -->
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@600&family=Exo+2:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -7152,17 +7150,8 @@ function showAdRewardNotif(amount){
 
 // Google Analytics — charge uniquement si consentement
 function initAnalytics(hasConsent){
-  if(!hasConsent) return;
-  if(document.querySelector('script[src*="gtag"]')) return;
-  const s=document.createElement('script');
-  s.async=true;s.src='https://www.googletagmanager.com/gtag/js?id=G-0CKY7KKZY9';
-  s.onload=function(){
-    window.dataLayer=window.dataLayer||[];
-    if(typeof window.gtag!=='function') window.gtag=function(){dataLayer.push(arguments);};
-    window.gtag('js',new Date());
-    window.gtag('config','G-0CKY7KKZY9',{anonymize_ip:true,send_page_view:true});
-  };
-  document.head.appendChild(s);
+  // Script GA4 déjà chargé dans le <head> avec Consent Mode v2
+  // Ici on ne fait rien de plus — le consent update est géré par acceptCk()/refuseCk()
 }
 
 // ═══════════════════════════════════════════════
@@ -7222,40 +7211,12 @@ window.addEventListener('DOMContentLoaded',()=>{
 </script>
 
 <script>
-// ══ Service Worker inline — PWA fonctionnelle sans fichier sw.js externe ══
+// ══ Service Worker — PWA ══
 if('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    const swCode = `
-const CACHE = 'snakewars-v3';
-// FIX: on met la page principale en cache à l'install pour que l'offline soit réel
-self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE).then(c => c.add('./').catch(()=>{})).then(() => self.skipWaiting())
-  );
-});
-self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));
-  self.clients.claim();
-});
-self.addEventListener('fetch', e => {
-  // Cache-first pour la page principale, network-first pour le reste (Ably, AdSense…)
-  const url = new URL(e.request.url);
-  if(url.pathname.endsWith('.html') || url.pathname === '/' || url.pathname.endsWith('/')) {
-    e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(res => {
-      const clone = res.clone();
-      caches.open(CACHE).then(c => c.put(e.request, clone));
-      return res;
-    })));
-  } else {
-    e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
-  }
-});
-`;
-    const blob = new Blob([swCode], {type:'text/javascript'});
-    const swUrl = URL.createObjectURL(blob);
-    navigator.serviceWorker.register(swUrl, {scope:'./'})
+    navigator.serviceWorker.register('./sw.js', {scope:'./'})
       .then(r => console.log('[SnakeWars PWA] SW OK ✅', r.scope))
-      .catch(() => navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+      .catch(err => console.warn('[SnakeWars PWA] SW échec:', err));
   });
 }
 </script>

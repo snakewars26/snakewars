@@ -7156,12 +7156,13 @@ function initAnalytics(hasConsent){
   if(document.querySelector('script[src*="gtag"]')) return;
   const s=document.createElement('script');
   s.async=true;s.src='https://www.googletagmanager.com/gtag/js?id=G-0CKY7KKZY9';
+  s.onload=function(){
+    window.dataLayer=window.dataLayer||[];
+    if(typeof window.gtag!=='function') window.gtag=function(){dataLayer.push(arguments);};
+    window.gtag('js',new Date());
+    window.gtag('config','G-0CKY7KKZY9',{anonymize_ip:true,send_page_view:true});
+  };
   document.head.appendChild(s);
-  // Utilise le gtag déjà défini dans <head> (Consent Mode v2) — ne pas redéfinir
-  window.dataLayer=window.dataLayer||[];
-  if(typeof window.gtag!=='function') window.gtag=function(){dataLayer.push(arguments);};
-  window.gtag('js',new Date());
-  window.gtag('config','G-0CKY7KKZY9',{anonymize_ip:true});
 }
 
 // ═══════════════════════════════════════════════

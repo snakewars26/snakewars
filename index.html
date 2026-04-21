@@ -7163,6 +7163,21 @@ function initCk(){
     setTimeout(()=>document.getElementById('ck').style.display='block',1200);
   } else {
     const ok=ckVal==='yes';
+    // ✅ FIX : mettre à jour le Consent Mode au rechargement, pas seulement au clic
+    if(typeof window.gtag === 'function'){
+      if(ok){
+        window.gtag('consent', 'update', {
+          ad_storage: 'granted', ad_user_data: 'granted',
+          ad_personalization: 'granted', analytics_storage: 'granted',
+          functionality_storage: 'granted', personalization_storage: 'granted'
+        });
+      } else {
+        window.gtag('consent', 'update', {
+          ad_storage: 'denied', ad_user_data: 'denied',
+          ad_personalization: 'denied', analytics_storage: 'denied'
+        });
+      }
+    }
     initAds(ok);
     initAnalytics(ok);
   }

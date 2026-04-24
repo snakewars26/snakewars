@@ -8,8 +8,8 @@
 <!-- Manifest inline — PWA sans fichier externe -->
 
 <!-- ═══ Favicon ═══ -->
-<link rel="icon" type="image/png" href="favicon.png">
-<link rel="apple-touch-icon" href="favicon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 
 <!-- ═══ PWA / Mobile optimisations ═══ -->
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6995,12 +6995,12 @@ const AD_CLIENT = 'ca-pub-5433648295830648';
 const AD_SLOT   = '5101438658';
 
 // Initialise AdSense (après consentement)
+let _adsLoaded = false;
 function initAds(hasConsent){
-  if(!hasConsent) return;
-  if(document.querySelector('script[data-adsense-loaded]')) return;
+  if(!hasConsent || _adsLoaded) return;
+  _adsLoaded = true;
   const s=document.createElement('script');
   s.async=true;
-  s.setAttribute('data-adsense-loaded','1');
   s.src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client='+AD_CLIENT;
   document.head.appendChild(s);
 }
@@ -7230,7 +7230,7 @@ window.addEventListener('DOMContentLoaded',()=>{
 
 <script>
 // ══ Service Worker — PWA ══
-if('serviceWorker' in navigator) {
+if('serviceWorker' in navigator && location.hostname === 'snakewars26.github.io') {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js', {scope:'./'})
       .then(r => console.log('[SnakeWars PWA] SW OK ✅', r.scope))

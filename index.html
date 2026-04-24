@@ -2,7 +2,6 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'unsafe-inline' https://cdn.ably.com https://www.googletagmanager.com https://analytics.google.com https://pagead2.googlesyndication.com https://www.google-analytics.com https://fonts.googleapis.com https://fundingchoicesmessages.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.ably.io wss://*.ably.io https://realtime.ably.com wss://realtime.ably.com https://ipapi.co https://pagead2.googlesyndication.com https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://fundingchoicesmessages.google.com; frame-src https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://fundingchoicesmessages.google.com; object-src 'none';">
 <link rel="manifest" href="./manifest.json">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <meta name="theme-color" content="#050810">
@@ -58,7 +57,7 @@
     functionality_storage:   'denied',
     personalization_storage: 'denied',
     security_storage:        'granted',
-    wait_for_update:         500
+    wait_for_update:         2000
   });
   gtag('set', 'ads_data_redaction', true);
   gtag('set', 'url_passthrough', true);
@@ -75,7 +74,7 @@
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-0CKY7KKZY9"></script>
 <script>
   gtag('js', new Date());
-  gtag('config', 'G-0CKY7KKZY9', {anonymize_ip: true});
+  gtag('config', 'G-0CKY7KKZY9');
 </script>
 <!-- AdSense chargé après consentement RGPD via initAds() — ne pas dupliquer ici -->
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@600&family=Exo+2:wght@400;600&display=swap" rel="stylesheet">

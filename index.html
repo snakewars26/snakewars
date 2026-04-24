@@ -41,14 +41,10 @@
 <!-- Google AdSense -->
 <meta name="google-adsense-account" content="ca-pub-5433648295830648">
 <!-- AdSense chargé après consentement RGPD via initAds() uniquement — RGPD/ePrivacy compliant -->
-<!-- Ably Realtime SDK -->
-<script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
-
-<!-- ═══ Google Consent Mode v2 — OBLIGATOIRE AVANT ADSENSE (RGPD/EEE) ═══ -->
+<!-- ═══ Google Consent Mode v2 — EN PREMIER (RGPD/EEE) ═══ -->
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
-  // Tout refusé par défaut tant que l'utilisateur n'a pas choisi
   gtag('consent', 'default', {
     ad_storage:              'denied',
     ad_user_data:            'denied',
@@ -61,7 +57,6 @@
   });
   gtag('set', 'ads_data_redaction', true);
   gtag('set', 'url_passthrough', true);
-  // ✅ Restaurer le consentement immédiatement si déjà accordé (même pattern que VoltClip)
   (function(){
     var _ck = localStorage.getItem('sw_ck');
     if(_ck === 'yes'){
@@ -69,13 +64,14 @@
     }
   })();
 </script>
-
-<!-- GA4 — chargé dès le départ avec Consent Mode v2 actif (RGPD conforme) -->
+<!-- GA4 -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-0CKY7KKZY9"></script>
 <script>
   gtag('js', new Date());
   gtag('config', 'G-0CKY7KKZY9');
 </script>
+<!-- Ably Realtime SDK — chargé APRÈS GA4 -->
+<script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
 <!-- AdSense chargé après consentement RGPD via initAds() — ne pas dupliquer ici -->
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@600&family=Exo+2:wght@400;600&display=swap" rel="stylesheet">
 <style>

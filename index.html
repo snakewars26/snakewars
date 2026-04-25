@@ -8,8 +8,8 @@
 <!-- Manifest inline — PWA sans fichier externe -->
 
 <!-- ═══ Favicon ═══ -->
-<link rel="icon" type="image/png" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="favicon.png">
 
 <!-- ═══ PWA / Mobile optimisations ═══ -->
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -41,10 +41,12 @@
 <!-- Google AdSense -->
 <meta name="google-adsense-account" content="ca-pub-5433648295830648">
 <!-- AdSense chargé après consentement RGPD via initAds() uniquement — RGPD/ePrivacy compliant -->
-<!-- ═══ Google Consent Mode v2 — EN PREMIER (RGPD/EEE) ═══ -->
+<!-- ═══ Google Consent Mode v2 — CORRIGÉ ═══ -->
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
+
+  // 1. CONSENT DEFAULT — tout bloqué (RGPD)
   gtag('consent', 'default', {
     ad_storage:              'denied',
     ad_user_data:            'denied',
@@ -57,18 +59,32 @@
   });
   gtag('set', 'ads_data_redaction', true);
   gtag('set', 'url_passthrough', true);
+
+  // 2. VÉRIFIER LE CONSENTEMENT EXISTANT AVANT de charger GA4
   (function(){
     var _ck = localStorage.getItem('sw_ck');
     if(_ck === 'yes'){
-      gtag('consent','update',{ad_storage:'granted',ad_user_data:'granted',ad_personalization:'granted',analytics_storage:'granted',functionality_storage:'granted',personalization_storage:'granted'});
+      gtag('consent', 'update', {
+        ad_storage:           'granted',
+        ad_user_data:         'granted',
+        ad_personalization:   'granted',
+        analytics_storage:    'granted',
+        functionality_storage:'granted',
+        personalization_storage:'granted'
+      });
     }
   })();
 </script>
-<!-- GA4 -->
+
+<!-- 3. CHARGER GA4 SEULEMENT APRÈS le consent check -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-0CKY7KKZY9"></script>
 <script>
   gtag('js', new Date());
-  gtag('config', 'G-0CKY7KKZY9');
+  gtag('config', 'G-0CKY7KKZY9', {
+    send_page_view: true,
+    cookie_flags: 'SameSite=None;Secure',
+    cookie_expires: 63072000
+  });
 </script>
 <!-- Ably Realtime SDK — chargé APRÈS GA4 -->
 <script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
@@ -1858,7 +1874,6 @@ function stopMultiplayerChat(){}
 function publishSync(nowMs) {
   if (!syncInterval || !ablyChannel || !_pubPayload) return;
   if (ablyClient?.connection?.state !== 'connected') return;
-  if (ablyChannel.state === 'failed' || ablyChannel.state === 'suspended') return;
   const _now = nowMs !== undefined ? nowMs : Date.now();
   if (_now - _ablyLastPub < 100) return; // 10 msg/s max
 
@@ -6996,12 +7011,12 @@ const AD_CLIENT = 'ca-pub-5433648295830648';
 const AD_SLOT   = '5101438658';
 
 // Initialise AdSense (après consentement)
-let _adsLoaded = false;
 function initAds(hasConsent){
-  if(!hasConsent || _adsLoaded) return;
-  _adsLoaded = true;
+  if(!hasConsent) return;
+  if(document.querySelector('script[data-adsense-loaded]')) return;
   const s=document.createElement('script');
   s.async=true;
+  s.setAttribute('data-adsense-loaded','1');
   s.src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client='+AD_CLIENT;
   document.head.appendChild(s);
 }
@@ -7186,31 +7201,41 @@ function initCk(){
   }
 }
 function acceptCk(){
-  localStorage.setItem('sw_ck','yes');
+  try { localStorage.setItem('sw_ck','yes'); } catch(e) {}
+
+  // 1. Mettre à jour le consentement Google
+  gtag('consent', 'update', {
+    ad_storage:           'granted',
+    ad_user_data:         'granted',
+    ad_personalization:   'granted',
+    analytics_storage:    'granted',
+    functionality_storage:'granted',
+    personalization_storage:'granted'
+  });
+
+  // 2. Réinitialiser GA4 pour qu'il démarre avec le nouveau consentement
+  gtag('config', 'G-0CKY7KKZY9', {
+    send_page_view: true,
+    page_title: document.title,
+    page_location: window.location.href
+  });
+
+  // 3. Masquer le bandeau
   hideCk();
-  // Mettre à jour Consent Mode v2
-  if(typeof window.gtag === 'function'){
-    window.gtag('consent', 'update', {
-      ad_storage: 'granted', ad_user_data: 'granted',
-      ad_personalization: 'granted', analytics_storage: 'granted',
-      functionality_storage: 'granted', personalization_storage: 'granted'
-    });
-    window.gtag('event','page_view');
-  }
+
   initAds(true);
   initAnalytics(true);
+  console.log('[SnakeWars] Consentement accepté — GA4 activé');
 }
 function refuseCk(){
-  localStorage.setItem('sw_ck','no');
+  try { localStorage.setItem('sw_ck','no'); } catch(e) {}
   hideCk();
-  if(typeof window.gtag === 'function'){
-    window.gtag('consent', 'update', {
-      ad_storage: 'denied', ad_user_data: 'denied',
-      ad_personalization: 'denied', analytics_storage: 'denied'
-    });
-  }
+  console.log('[SnakeWars] Consentement refusé — GA4 désactivé');
 }
-function hideCk(){document.getElementById('ck').style.display='none';}
+function hideCk(){
+  const ck = document.getElementById('ck');
+  if(ck){ ck.style.display='none'; ck.style.visibility='hidden'; }
+}
 
 // ═══════════════════════════════════════════════
 // INIT
@@ -7231,7 +7256,7 @@ window.addEventListener('DOMContentLoaded',()=>{
 
 <script>
 // ══ Service Worker — PWA ══
-if('serviceWorker' in navigator && location.hostname === 'snakewars26.github.io') {
+if('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js', {scope:'./'})
       .then(r => console.log('[SnakeWars PWA] SW OK ✅', r.scope))

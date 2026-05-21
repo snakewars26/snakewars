@@ -2199,6 +2199,9 @@ function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   el.classList.add('active');
   if(id === 'menuScreen') refreshMenu();
+  // Masquer le footer pendant la partie, visible sinon
+  const _sf = document.getElementById('siteFooter');
+  if(_sf) _sf.style.display = (id === 'gameScreen') ? 'none' : '';
 }
 
 // Patch launchDirect pour utiliser startGame du moteur SERPEX
@@ -7443,5 +7446,39 @@ window.addEventListener('DOMContentLoaded', () => {
   </button>
 
 </div><!-- /adOverlay -->
+
+<!-- ═══ FOOTER SEO — liens découvrables par Google ═══ -->
+<footer id="siteFooter" style="position:fixed;bottom:0;left:0;width:100%;z-index:1;
+  background:rgba(5,8,20,0.85);border-top:1px solid rgba(0,212,255,0.08);
+  padding:0.35rem 1rem;text-align:center;pointer-events:auto;">
+  <nav aria-label="Liens du site" style="display:flex;flex-wrap:wrap;justify-content:center;gap:0.4rem 1rem;">
+    <a href="about.html"       style="font-family:'Orbitron',monospace;font-size:0.48rem;color:rgba(0,212,255,0.5);text-decoration:none;letter-spacing:0.08em;">À PROPOS</a>
+    <a href="how-to-play.html" style="font-family:'Orbitron',monospace;font-size:0.48rem;color:rgba(0,212,255,0.5);text-decoration:none;letter-spacing:0.08em;">GUIDE</a>
+    <a href="contact.html"     style="font-family:'Orbitron',monospace;font-size:0.48rem;color:rgba(0,212,255,0.5);text-decoration:none;letter-spacing:0.08em;">CONTACT</a>
+    <a href="privacy.html"     style="font-family:'Orbitron',monospace;font-size:0.48rem;color:rgba(0,212,255,0.5);text-decoration:none;letter-spacing:0.08em;">CONFIDENTIALITÉ</a>
+    <a href="terms.html"       style="font-family:'Orbitron',monospace;font-size:0.48rem;color:rgba(0,212,255,0.5);text-decoration:none;letter-spacing:0.08em;">CGU</a>
+  </nav>
+</footer>
+
+<!-- ═══ NOSCRIPT — contenu visible sans JS pour Google ═══ -->
+<noscript>
+<div style="max-width:700px;margin:2rem auto;padding:2rem;font-family:sans-serif;color:#fff;background:#050810;">
+  <h1 style="font-size:1.5rem;margin-bottom:1rem;">SnakeWars.io — Jeu de Serpent Battle Royale Multijoueur</h1>
+  <p style="line-height:1.8;margin-bottom:1rem;">
+    SnakeWars.io est un jeu de serpent Battle Royale multijoueur gratuit, jouable directement dans votre navigateur sans inscription ni installation.
+    Affrontez jusqu'à 100 joueurs en temps réel, grandissez en mangeant des orbes, éliminez vos adversaires et survivez pour remporter la victoire.
+    Compatible PC, mobile et tablette. Disponible en français.
+  </p>
+  <p style="margin-bottom:1rem;"><strong>JavaScript est requis pour jouer.</strong> Veuillez activer JavaScript dans votre navigateur.</p>
+  <nav style="display:flex;gap:1rem;flex-wrap:wrap;">
+    <a href="about.html"       style="color:#00d4ff;">À propos</a>
+    <a href="how-to-play.html" style="color:#00d4ff;">Comment jouer</a>
+    <a href="contact.html"     style="color:#00d4ff;">Contact</a>
+    <a href="privacy.html"     style="color:#00d4ff;">Politique de confidentialité</a>
+    <a href="terms.html"       style="color:#00d4ff;">CGU</a>
+  </nav>
+</div>
+</noscript>
+
 </body>
 </html>

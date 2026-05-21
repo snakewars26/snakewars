@@ -1,5 +1,5 @@
 // SnakeWars Service Worker — Cache stratégique
-const CACHE_NAME = 'snakewars-v3';
+const CACHE_NAME = 'snakewars-v1';
 const ASSETS = [
   './index.html',
   './manifest.json',
@@ -37,21 +37,16 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // Ignorer TOUTES les requêtes externes (Ably, AdSense, Analytics, Google Tag Manager...)
-  if (url.origin !== location.origin) return;
-
-  // Ignorer les requêtes non-GET
-  if (e.request.method !== 'GET') return;
+  // Ignorer les requêtes externes (Ably, AdSense, Analytics...)
+  if(url.origin !== location.origin) return;
 
   // Images : cache-first
-  if (e.request.destination === 'image') {
+  if(e.request.destination === 'image') {
     e.respondWith(
       caches.match(e.request).then(cached => {
         return cached || fetch(e.request).then(res => {
-          if (res && res.status === 200) {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
-          }
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
           return res;
         });
       })
@@ -63,10 +58,8 @@ self.addEventListener('fetch', e => {
   e.respondWith(
     fetch(e.request)
       .then(res => {
-        if (res && res.status === 200) {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
-        }
+        const clone = res.clone();
+        caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
         return res;
       })
       .catch(() => caches.match(e.request))
